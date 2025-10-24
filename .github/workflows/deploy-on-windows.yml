@@ -1,4 +1,4 @@
-name: Deploy 13F Scraper on Windows Laptop with Docker
+name: Deploy 13f-auto-rebalancer on Windows Laptop with Docker
 
 on:
   push:
@@ -16,21 +16,21 @@ jobs:
 
       # 2. Docker 이미지 빌드
       - name: 2. Build Docker Image
-        run: docker build -t 13f-scraper .
+        run: docker build -t 13f-auto-rebalancer .
 
       # 3. 기존 컨테이너 중지 및 제거
       - name: 3. Stop and Remove Existing Container
         continue-on-error: true
         shell: cmd
         run: |
-          docker stop 13f-scraper-container
-          docker rm 13f-scraper-container
+          docker stop 13f-auto-rebalancer-container
+          docker rm 13f-auto-rebalancer-container
 
       # 4. 새 Docker 컨테이너 실행 (볼륨 마운트 옵션 추가!)
       - name: 4. Run New Docker Container
         run: |
           docker run -d --restart always `
           -p 8090:8090 `
-          -v "C:\13f-server\config:/config" `
-          --name 13f-scraper-container `
-          13f-scraper --spring.config.location=file:/config/application.yml
+          -v "C:\13f-auto-rebalancer\config:/config" `
+          --name 13f-auto-rebalancer-container `
+          13f-auto-rebalancer --spring.config.location=file:/config/application.yml
