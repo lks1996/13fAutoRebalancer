@@ -1,0 +1,68 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.6'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com'
+version = '0.0.1-SNAPSHOT'
+description = 'Scrap 13f Data'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Spring Boot Starters
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	// Database & JSON
+	implementation 'com.oracle.database.jdbc:ojdbc8'
+	implementation 'com.google.code.gson:gson:2.10.1'
+
+	// Lombok - MapStruct보다 먼저 선언.
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// MapStruct
+	implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+
+	// Lombok과 MapStruct를 연결해주는 라이브러리.
+	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
+	// logback-slack
+	implementation 'com.github.maricn:logback-slack-appender:1.6.1'
+
+	// Google
+	implementation 'com.google.api-client:google-api-client:2.3.0'
+	implementation 'com.google.auth:google-auth-library-oauth2-http:1.19.0'
+	implementation 'com.google.oauth-client:google-oauth-client-jetty:1.34.1'
+	implementation 'com.google.apis:google-api-services-sheets:v4-rev20230815-2.0.0'
+	implementation 'com.google.http-client:google-http-client-jackson2:1.43.3'
+
+	// firebase
+	implementation 'com.google.cloud:google-cloud-firestore:3.18.0'
+	implementation 'com.google.firebase:firebase-admin:9.3.0'
+
+	// Testing
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

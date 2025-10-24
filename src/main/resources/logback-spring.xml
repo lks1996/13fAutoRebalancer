@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true">
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name"/>
+    <springProperty scope="context" name="SLACK_WEBHOOK" source="slack.webhookurl"/>
+
+    <!-- Slack Appender -->
+    <appender name="SLACK" class="com.github.maricn.logback.SlackAppender">
+        <webhookUri>${SLACK_WEBHOOK}</webhookUri>
+        <username>${APP_NAME}-Logger</username>
+        <channel>#alerts</channel>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>[%level] %logger - %msg%n</pattern>
+        </layout>
+
+        <!-- 로그레벨 WARN 이상일 때만 전송 -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+    </appender>
+
+    <!-- 콘솔에도 찍기 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Root logger : Slack 은 빼고 콘솔만 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- 내 프로젝트 패키지 로그만 Slack 추가 -->
+    <logger name="com.autoRebalancer" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="SLACK"/>
+    </logger>
+</configuration>
