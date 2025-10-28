@@ -47,7 +47,7 @@ public class DomesticStockService {
     private final String urlInquirePrice = "/uapi/domestic-stock/v1/quotations/inquire-price";
     // 국내주식주문(현금)_국내주식
     private final String urlOrder = "/uapi/domestic-stock/v1/trading/order-cash";
-    // 국내주식주문(현금)_국내주식
+    // 주식일별주문체결조회[v1_국내주식-005]
     private final String urlDailyCcld = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld";
 
     private HttpHeaders getHttpHeaders() {
