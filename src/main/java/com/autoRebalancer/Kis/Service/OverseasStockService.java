@@ -1,6 +1,6 @@
 package com.autoRebalancer.Kis.Service;
 
-import com.autoRebalancer.Kis.Dto.Overseas.StockDto;
+import com.autoRebalancer.Kis.Dto.OverseasStockDto;
 import com.autoRebalancer.Kis.Token.RequireValidToken;
 import com.autoRebalancer.Kis.Token.TokenHolder;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -64,11 +64,10 @@ public class OverseasStockService {
 
     /**
      * 해외주식잔고조회
-     *
      * @return
      */
     @RequireValidToken
-    public String getBalance(StockDto stockDto) {
+    public String getBalance(OverseasStockDto stockDto) {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = getHttpHeaders();
 
@@ -116,17 +115,12 @@ public class OverseasStockService {
      * 해외주식현재가 시세
      */
     @RequireValidToken
-    public String getOverseasStockPrice(StockDto stockDto) {
+    public String getOverseasStockPrice(OverseasStockDto stockDto) {
 
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = getHttpHeaders();
 
         headers.set("tr_id", "HHDFS00000300");  // 실전, 모의용 공통
-//        if(vprofile.equals("prod")) {
-//            headers.set("tr_id", "HHDFS00000300");  // 실전용
-//        } else {
-//            headers.set("tr_id", "HHDFS00000300");  // 모의용
-//        }
 
         // 해외주식 현재체결가[v1_해외주식-009]
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(DOMAIN + urlInquirePrice)
@@ -147,7 +141,7 @@ public class OverseasStockService {
                 entity,
                 String.class);
 
-        log.debug(" response.getBody(): {}",  response.getBody());
+        log.info(" response.getBody(): {}",  response.getBody());
         log.info("[OverseasService.getOverseasStockPrice succeed.]");
 
         // 테스트 호출 시 호출 제한이 있음.
@@ -168,7 +162,7 @@ public class OverseasStockService {
      * 해외주식주문
      */
     @RequireValidToken
-    public void orderOverseasStock(StockDto orderStock) throws JsonProcessingException {
+    public void orderOverseasStock(OverseasStockDto orderStock) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         ObjectMapper objectMapper = new ObjectMapper();
         HttpHeaders headers = getHttpHeaders();
@@ -239,7 +233,7 @@ public class OverseasStockService {
      * 해외주식 주문체결내역[v1_해외주식-007]
      */
     @RequireValidToken
-    public void getOverseasCcnl(StockDto stockDto) throws JsonProcessingException {
+    public void getOverseasCcnl(OverseasStockDto stockDto) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = getHttpHeaders();
 

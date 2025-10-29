@@ -1,6 +1,6 @@
 package com.autoRebalancer.Kis.Controller;
 
-import com.autoRebalancer.Kis.Dto.StockDto;
+import com.autoRebalancer.Kis.Dto.DomesticStockDto;
 import com.autoRebalancer.Kis.Service.DomesticStockService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ public class DomesticSockController {
      * 국내주식 잔고 조회
      */
     @GetMapping("/balance")
-    public void getDomesticStockBalance(StockDto stockDto) {
+    public void getDomesticStockBalance(DomesticStockDto stockDto) {
         domesticStockService.getBalance(stockDto);
     }
 
@@ -31,7 +31,7 @@ public class DomesticSockController {
      * 국내주식현재가 시세
      */
     @GetMapping("/inquirePrice")
-    public void getDomesticStockPrice(StockDto orderStock) {
+    public void getDomesticStockPrice(DomesticStockDto orderStock) {
         domesticStockService.getDomesticStockPrice(orderStock);
     }
 
@@ -39,7 +39,7 @@ public class DomesticSockController {
      * 국내주식주문(현금)
      */
     @GetMapping("/order")
-    public void orderDomesticStockCash(StockDto orderStock) throws JsonProcessingException {
+    public void orderDomesticStockCash(DomesticStockDto orderStock) throws JsonProcessingException {
         domesticStockService.orderDomesticStockCash(orderStock);
     }
 
@@ -47,7 +47,7 @@ public class DomesticSockController {
      * 주식일별주문체결조회
      */
     @GetMapping("/dailyCcld")
-    public void getDomesticDailyCcld(StockDto stockDto) throws JsonProcessingException {
+    public void getDomesticDailyCcld(DomesticStockDto stockDto) throws JsonProcessingException {
         domesticStockService.getDomesticDailyCcld(stockDto);
     }
 
@@ -55,7 +55,7 @@ public class DomesticSockController {
      * 모의투자 전용 거래내역 조회
      */
     @GetMapping("/getTestOrderHistory")
-    public void getTestDomesticOrderHistory(StockDto stockDto) throws JsonProcessingException {
+    public void getTestDomesticOrderHistory(DomesticStockDto stockDto) throws JsonProcessingException {
         domesticStockService.getTestDomesticOrderHistory(stockDto);
     }
 }

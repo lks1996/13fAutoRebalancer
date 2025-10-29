@@ -1,6 +1,6 @@
 package com.autoRebalancer.Kis.Service;
 
-import com.autoRebalancer.Kis.Dto.StockDto;
+import com.autoRebalancer.Kis.Dto.DomesticStockDto;
 import com.autoRebalancer.Kis.Token.RequireValidToken;
 import com.autoRebalancer.Kis.Token.TokenHolder;
 
@@ -68,7 +68,7 @@ public class DomesticStockService {
      * @return
      */
     @RequireValidToken
-    public String getBalance(StockDto stockDto) {
+    public String getBalance(DomesticStockDto stockDto) {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = getHttpHeaders();
 
@@ -100,7 +100,7 @@ public class DomesticStockService {
                 entity,
                 String.class);
 
-        log.debug(" response.getBody(): {}",  response.getBody());
+        log.info(" response.getBody(): {}",  response.getBody());
         log.info("[DomesticService.getBalance succeed.]");
 
         // 테스트 호출 시 호출 제한이 있음.
@@ -121,7 +121,7 @@ public class DomesticStockService {
      * 국내주식현재가 시세
      */
     @RequireValidToken
-    public String getDomesticStockPrice(StockDto orderStock) {
+    public String getDomesticStockPrice(DomesticStockDto orderStock) {
 
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = getHttpHeaders();
@@ -172,7 +172,7 @@ public class DomesticStockService {
      * 국내주식주문(현금)
      */
     @RequireValidToken
-    public void orderDomesticStockCash(StockDto orderStock) throws JsonProcessingException {
+    public void orderDomesticStockCash(DomesticStockDto orderStock) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         ObjectMapper objectMapper = new ObjectMapper();
         HttpHeaders headers = getHttpHeaders();
@@ -243,7 +243,7 @@ public class DomesticStockService {
      * 모의투자는 지원하지 않음.
      */
     @RequireValidToken
-    public void getDomesticDailyCcld(StockDto stockDto) throws JsonProcessingException {
+    public void getDomesticDailyCcld(DomesticStockDto stockDto) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         ObjectMapper objectMapper = new ObjectMapper();
         HttpHeaders headers = getHttpHeaders();
@@ -321,7 +321,7 @@ public class DomesticStockService {
      * 웹 직접 호출. OPEN API 아님.
      */
     @RequireValidToken
-    public void getTestDomesticOrderHistory(StockDto stockDto) throws JsonProcessingException {
+    public void getTestDomesticOrderHistory(DomesticStockDto stockDto) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         ObjectMapper objectMapper = new ObjectMapper();
         HttpHeaders headers = getHttpHeaders();

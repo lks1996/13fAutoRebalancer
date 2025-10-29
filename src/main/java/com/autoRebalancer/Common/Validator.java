@@ -1,12 +1,12 @@
 package com.autoRebalancer.Common;
 
-import com.autoRebalancer.Kis.Dto.StockDto;
+import com.autoRebalancer.Kis.Dto.DomesticStockDto;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Validator {
 
-    public static boolean isValidOrder(StockDto order) {
+    public static boolean isValidOrder(DomesticStockDto order) {
         if (isBlank(order.getPdno())) {
             log.error("주문 실패: 종목코드 누락");
             return false;

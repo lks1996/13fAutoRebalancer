@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class StockDto {
+public class DomesticStockDto {
 
     // 종합계좌번호
     String cano;

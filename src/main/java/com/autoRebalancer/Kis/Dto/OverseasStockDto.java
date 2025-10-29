@@ -1,4 +1,4 @@
-package com.autoRebalancer.Kis.Dto.Overseas;
+package com.autoRebalancer.Kis.Dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class StockDto {
+public class OverseasStockDto {
 
     /** 잔고 조회 */
     // 종합계좌번호
