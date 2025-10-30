@@ -14,6 +14,9 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class StockPriceResponseDto {
 
+    /**
+     * 국내 주식용
+     */
     @JsonProperty("iscd_stat_cls_code")
     private String iscdStatClsCode;
 
@@ -259,4 +262,54 @@ public class StockPriceResponseDto {
 
     @JsonProperty("mang_issu_cls_code")
     private String mangIssuClsCode;
+
+
+
+    /**
+     * 해외 주식용
+     */
+    // 실시간조회종목코드
+    @JsonProperty("rsym")
+    private String rsym;
+
+    // 소수점자리수
+    @JsonProperty("zdiv")
+    private String zdiv;
+
+    // 전일종가
+    @JsonProperty("base")
+    private String base;
+
+    // 전일거래량
+    @JsonProperty("pvol")
+    private String pvol;
+
+    // 현재가
+    @JsonProperty("last")
+    private String last;
+
+    // 대비기호
+    @JsonProperty("sign")
+    private String sign;
+
+    // 대비
+    @JsonProperty("diff")
+    private String diff;
+
+    // 등락율
+    @JsonProperty("rate")
+    private String rate;
+
+    // 거래량
+    @JsonProperty("tvol")
+    private String tvol;
+
+    // 거래대금
+    @JsonProperty("tamt")
+    private String tamt;
+
+    // 매수가능여부
+    @JsonProperty("ordy")
+    private String ordy;
+
 }

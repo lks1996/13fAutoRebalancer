@@ -205,8 +205,8 @@ public class OverseasStockService {
         log.info(" 주문단가: {}",  orderStock.getOvrsOrdUnpr());
         log.info("==========================================");
 
-        log.debug("Headers: {}", headers);
-        log.debug("Request Body: {}", new ObjectMapper().writeValueAsString(requestBody));
+        log.info("Headers: {}", headers);
+        log.info("Request Body: {}", new ObjectMapper().writeValueAsString(requestBody));
 
         ResponseEntity<String> response = restTemplate.exchange(
                 DOMAIN + urlOrder,
@@ -214,7 +214,7 @@ public class OverseasStockService {
                 entity,
                 String.class);
 
-        log.debug(" response.getBody(): {}",  response.getBody());
+        log.info(" response.getBody(): {}",  response.getBody());
         log.info("[OverSeasService.orderOverseasStock succeed.]");
 
         // 테스트 호출 시 호출 제한이 있음.
@@ -250,7 +250,7 @@ public class OverseasStockService {
                 .queryParam("PDNO", "%") // 종목번호 6자리 / 전종목일 경우 "%" 입력
                 .queryParam("ORD_STRT_DT", stockDto.getOrdStrtDt())  // 조회시작일자( YYYYMMDD )
                 .queryParam("ORD_END_DT", stockDto.getOrdEndDt()) // 조회종료일자( YYYYMMDD )
-                .queryParam("SLL_BUY_DVSN_CD", stockDto.getSllBuyDvsnCd()) // 매도매수구분코드( 00 : 전체 / 01 : 매도 / 02 : 매수 )
+                .queryParam("SLL_BUY_DVSN", stockDto.getSllBuyDvsn()) // 매도매수구분코드( 00 : 전체 / 01 : 매도 / 02 : 매수 )
                 .queryParam("CCLD_NCCS_DVSN", stockDto.getCcldNccsDvsn()) // 체결미체결구분 ( 00 : 전체 / 01 : 체결 / 02 : 미체결 )
                 .queryParam("OVRS_EXCG_CD", stockDto.getOvrsExcgCd()) // 해외거래소코드
                 .queryParam("SORT_SQN", stockDto.getSortSqn()) // 정렬순서
@@ -279,7 +279,7 @@ public class OverseasStockService {
         log.debug("ACNT_PRDT_CD -> {}", ACNT_PRDT_CD);
         log.debug("ORD_STRT_DT -> {}", stockDto.getOrdStrtDt());
         log.debug("ORD_END_DT -> {}", stockDto.getOrdEndDt());
-        log.debug("SLL_BUY_DVSN_CD -> {}", stockDto.getSllBuyDvsnCd());
+        log.debug("SLL_BUY_DVSN_CD -> {}", stockDto.getSllBuyDvsn());
         log.debug("CCLD_NCCS_DVSN -> {}", stockDto.getOrdGnoBrno());
         log.debug("OVRS_EXCG_CD -> {}", stockDto.getOvrsExcgCd());
         log.debug("SORT_SQN -> {}", stockDto.getSortSqn());
@@ -288,6 +288,8 @@ public class OverseasStockService {
         log.debug("ODNO -> {}", stockDto.getOrdNo());
         log.debug("CTX_AREA_NK200 -> {}", stockDto.getCtxAreaFk200());
         log.debug("CTX_AREA_NK200 -> {}", stockDto.getCtxAreaNk200());
+
+        log.info(" response.getBody(): {}",  response.getBody());
         log.info("[OverseasService.getOverseasCcnl succeed.]");
 
         // 테스트 호출 시 호출 제한이 있음.

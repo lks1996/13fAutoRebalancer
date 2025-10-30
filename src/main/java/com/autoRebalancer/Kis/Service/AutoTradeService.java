@@ -3,6 +3,8 @@ package com.autoRebalancer.Kis.Service;
 import com.autoRebalancer.Kis.Dto.*;
 import com.autoRebalancer.Googlesheet.DTO.SheetDto;
 import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
+import com.autoRebalancer.KisMasterUpdater.Dto.StockInfoDto;
+import com.autoRebalancer.KisMasterUpdater.Service.KisMasterClientService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -11,10 +13,8 @@ import org.springframework.stereotype.Service;
 import com.autoRebalancer.Common.Parser;
 import com.autoRebalancer.Common.Validator;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -23,13 +23,16 @@ public class AutoTradeService {
     private final DomesticStockService domesticStockService;
     private final SheetDataImportService sheetDataImportService;
     private final OverseasStockService overseasStockService;
+    private final KisMasterClientService kisMasterClientService;
 
     public AutoTradeService(DomesticStockService domesticStockService
             , SheetDataImportService sheetDataImportService
-            , OverseasStockService overseasStockService) {
+            , OverseasStockService overseasStockService
+            , KisMasterClientService kisMasterClientService, KisMasterClientService kisMasterClient) {
         this.domesticStockService = domesticStockService;
         this.sheetDataImportService = sheetDataImportService;
         this.overseasStockService = overseasStockService;
+        this.kisMasterClientService = kisMasterClientService;
     }
 
     @Value("${vprofiles}")
@@ -73,21 +76,24 @@ public class AutoTradeService {
             long portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
 
             // 3-2. 미보유 종목 매수 필요 리스트 추출.
-            List<DomesticStockDto> toBuyList = calculateUnholdingBuys(unholdingStockList, portfolioTotal, cashBalance);
+            List<OverseasStockDto> toBuyList = calculateUnholdingBuys(unholdingStockList, portfolioTotal, cashBalance);
 
-            // 3-3. 추가 매수가 필요한 종목 주문.
-            orderStocks(toBuyList);
+            if (!toBuyList.isEmpty()) {
+                Map<String, StockInfoDto> exchangeMapForBuy = getKisMasterInfoMap(toBuyList);
+                // 3-3. 추가 매수가 필요한 종목 주문.
+                orderStocks(toBuyList, exchangeMapForBuy);
 
-            // 3-4. 잔존 예상 예수금 계산.
-            cashBalance = computeEstimateRestCashBalance(cashBalance, toBuyList);
-            log.warn("[WARN]미보유 종목 매수 후 예상 예수금 총액: {}", cashBalance);
+                // 3-4. 잔존 예상 예수금 계산.
+                cashBalance = computeEstimateRestCashBalance(cashBalance, toBuyList);
+                log.warn("[WARN]미보유 종목 매수 후 예상 예수금 총액: {}", cashBalance);
 
-            // 3-4. 미보유 종목이 매수되었는지 확인.
-            // 5초 간격으로 10번 확인.
-            boolean buyCompleted = waitForBuyCompletion(toBuyList, 10, 5000);
+                // 3-4. 미보유 종목이 매수되었는지 확인.
+                // 5초 간격으로 10번 확인.
+                boolean buyCompleted = waitForBuyCompletion(toBuyList, 10, 5000);
 
-            if ( !buyCompleted ) {
-                log.warn("[WARN]미보유 종목 매수 미체결 상태로 리밸런싱 시작.");
+                if ( !buyCompleted ) {
+                    log.warn("[WARN]미보유 종목 매수 미체결 상태로 리밸런싱 시작.");
+                }
             }
         }
 
@@ -102,13 +108,18 @@ public class AutoTradeService {
         }
 
         // 4-2. 추가 매수 필요 리스트 추출.
-        List<DomesticStockDto> rebalanceBuyList = calculateRebalanceBuys(holdingStocks, sheetList, cashBalance);
+        List<OverseasStockDto> rebalanceBuyList = calculateRebalanceBuys(holdingStocks, sheetList, cashBalance);
 
-        // 4-3. 추가 매수가 필요한 종목 주문.
-        orderStocks(rebalanceBuyList);
+        if (!rebalanceBuyList.isEmpty()) {
 
-        // 4-4. 잔존 예상 예수금 계산.
-        cashBalance = computeEstimateRestCashBalance(cashBalance, rebalanceBuyList);
+            Map<String, StockInfoDto> exchangeMapForRebalance = getKisMasterInfoMap(rebalanceBuyList);
+            // 4-3. 추가 매수가 필요한 종목 주문.
+            orderStocks(rebalanceBuyList, exchangeMapForRebalance);
+
+            // 4-4. 잔존 예상 예수금 계산.
+            cashBalance = computeEstimateRestCashBalance(cashBalance, rebalanceBuyList);
+        }
+
         log.warn("[WARN]리밸런싱 종목 매수 후 예상 예수금 총액: {}", cashBalance);
 
         log.info("==========================");
@@ -134,8 +145,6 @@ public class AutoTradeService {
             long sshPrnamt = row.size() > 2 ? Parser.safeParseLong(row.get(2)) : 0;
             long value = row.size() > 3 ? Parser.safeParseLong(row.get(3)) : 0;;
             double targetRatio = row.size() > 4 ? Parser.safeParseDouble(row.get(4)) : 0.0;
-            System.out.println("Value at index 4: " + row.get(4));
-            System.out.println("After Parser.safeParseDouble Value at index 4: " + targetRatio);
 
             resultList.add(new SheetDto("", stockCode, stockName, sshPrnamt, value, targetRatio));
         }
@@ -208,9 +217,9 @@ public class AutoTradeService {
      * @return resultList 매수 대상 종목 리스트
      * @throws Exception
      */
-    private List<DomesticStockDto> calculateUnholdingBuys(List<SheetDto> unholdingStockList, long portfolioTotal, long cashBalance) throws Exception {
+    private List<OverseasStockDto> calculateUnholdingBuys(List<SheetDto> unholdingStockList, long portfolioTotal, long cashBalance) throws Exception {
 
-        List<DomesticStockDto> resultList = new ArrayList<>();
+        List<OverseasStockDto> resultList = new ArrayList<>();
         List<Map<String, Object>> resultLogList = new ArrayList<>();
 
         for (SheetDto p : unholdingStockList) {
@@ -228,7 +237,7 @@ public class AutoTradeService {
 
             // 현재가 조회
             StockPriceResponseDto sprDto = getCurrentStockPrice(p.getStockCode());
-            long stockPrice = Long.parseLong(sprDto.getStckPrpr());
+            long stockPrice = Long.parseLong(sprDto.getLast());
 
             long quantityToBuy = 0;
             if (stockPrice > 0 && needToBuyAmount >= stockPrice) {
@@ -237,13 +246,14 @@ public class AutoTradeService {
 
             // 구매 필요 수량이 있는 경우 리스트에 추가
             if (quantityToBuy > 0) {
-                resultList.add(DomesticStockDto.builder()
-                        .pdno(p.getStockCode())
-                        .prdtName(p.getStockName())
-                        .ordUnpr(String.valueOf(stockPrice))
+                resultList.add(OverseasStockDto.builder()
+                        .ovrsExcgCd("")
+                        .symb(p.getStockCode())
+                        .symbName(p.getStockName())
+                        .ovrsOrdUnpr(String.valueOf(stockPrice))
                         .ordQty(String.valueOf(quantityToBuy))
-                        .orderType(2)
                         .ordDvsn("00")
+                        .orderType(2)
                         .build()
                 );
             }
@@ -289,7 +299,7 @@ public class AutoTradeService {
      * @param intervalMillis 재시도 간격
      * @return
      */
-    public boolean waitForBuyCompletion(List<DomesticStockDto> toBuyList, int maxRetries, long intervalMillis) {
+    public boolean waitForBuyCompletion(List<OverseasStockDto> toBuyList, int maxRetries, long intervalMillis) {
         ObjectMapper mapper = new ObjectMapper();
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -303,7 +313,7 @@ public class AutoTradeService {
                 // 모든 toBuyList 종목이 원하는 수량 이상 보유하고 있는지 확인.
                 boolean isAllBought = toBuyList.stream().allMatch(toBuy -> {
                     BalanceOutput1Dto matched = holdingStocks.stream()
-                            .filter(h -> h.getPdno().equals(toBuy.getPdno()))
+                            .filter(h -> h.getPdno().equals(toBuy.getSymb()))
                             .findFirst()
                             .orElse(null);
 
@@ -340,12 +350,12 @@ public class AutoTradeService {
      * @return resultList 매수 대상 종목 리스트
      * @throws Exception
      */
-    private List<DomesticStockDto> calculateRebalanceBuys(List<BalanceOutput1Dto> holdingStocks, List<SheetDto> sheetList, long cashBalance) throws Exception {
+    private List<OverseasStockDto> calculateRebalanceBuys(List<BalanceOutput1Dto> holdingStocks, List<SheetDto> sheetList, long cashBalance) throws Exception {
         // 1. 총 평가 금액 계산. (보유 종목 평가금 + 예수금)
         long totalEvalAmount = getPortfolioTotal(holdingStocks, cashBalance);
 
         // 2. 비율 비교 후 부족분 매수.
-        List<DomesticStockDto> resultList = new ArrayList<>();
+        List<OverseasStockDto> resultList = new ArrayList<>();
 
         for (BalanceOutput1Dto holding : holdingStocks) {
             if (cashBalance <= 0) {
@@ -385,13 +395,14 @@ public class AutoTradeService {
 
                 // 수량이 0 초과인 경우에만 매수 리스트에 추가.
                 if (quantityToBuy > 0) {
-                    resultList.add(DomesticStockDto.builder()
-                            .pdno(stockCode)
-                            .prdtName(holding.getPrdtName())
-                            .ordUnpr(String.valueOf(stockPrice))
+                    resultList.add(OverseasStockDto.builder()
+                            .ovrsExcgCd("")
+                            .symb(stockCode)
+                            .symbName("")
+                            .ovrsOrdUnpr(String.valueOf(stockPrice))
                             .ordQty(String.valueOf(quantityToBuy))
-                            .orderType(2)
                             .ordDvsn("00")
+                            .orderType(2)
                             .build()
                     );
 
@@ -406,20 +417,47 @@ public class AutoTradeService {
         return resultList;
     }
 
-    private void orderStocks(List<DomesticStockDto> orders) throws Exception {
-        for (DomesticStockDto order : orders) {
-            if (Validator.isValidOrder(order)) {
-                domesticStockService.orderDomesticStockCash(order);
+    private void orderStocks(List<OverseasStockDto> orders, Map<String, StockInfoDto> stockInfoMap) throws Exception {
+        for (OverseasStockDto order : orders) {
+            // 1. Map에서 티커(symb)로 거래소 코드(exchangeId) 조회
+            StockInfoDto stockInfo = stockInfoMap.get(order.getSymb());
+
+            if (stockInfo == null || stockInfo.exchangeId() == null || stockInfo.exchangeId().isEmpty()) {
+                log.warn("[WARN] Master info (or exchange code) not found for ticker: {}. Skipping order.", order.getSymb());
+                continue; // 거래소 코드 없으면 건너뛰기
+            }
+
+            // 2. KIS API에서 요구하는 형태로 DTO를 다시 만들거나, 기존 DTO 수정
+            //    (주의: record는 수정 불가, class라면 setter 사용 가능)
+            //    여기서는 KIS API용 DTO를 새로 만든다고 가정
+            OverseasStockDto orderRequest = OverseasStockDto.builder()
+                    .ovrsExcgCd(stockInfo.exchangeId())
+                    .symb(order.getSymb())// 종목번호(티커)
+                    .symbName((stockInfo.englishName() != null && !stockInfo.englishName().isEmpty() ? stockInfo.englishName() : ""))
+                    .ovrsOrdUnpr(order.getOvrsOrdUnpr())
+                    .ordQty(order.getOrdQty())
+                    .ordDvsn(order.getOrdDvsn())
+                    .orderType(2)
+                    .build();
+
+            if (Validator.isValidOverseasOrder(order)) {
+                try {
+                    overseasStockService.orderOverseasStock(orderRequest);
+                    log.info("[INFO] Order placed: {}", orderRequest);
+
+                } catch (Exception e) {
+                    log.error("[ERROR] Failed to place order for {}: {}", orderRequest.getSymb(), e.getMessage());
+                }
             } else {
                 log.warn("[WARN] Invalid order skipped: {}", order);
             }
         }
     }
 
-    private long computeEstimateRestCashBalance(long cashBalance, List<DomesticStockDto> orders) throws Exception {
+    private long computeEstimateRestCashBalance(long cashBalance, List<OverseasStockDto> orders) throws Exception {
         return cashBalance - orders.stream().mapToLong(dto -> {
             try {
-                long price = Long.parseLong(dto.getOrdUnpr()); // 매수 단가
+                long price = Long.parseLong(dto.getOvrsOrdUnpr()); // 매수 단가
                 long qty = Long.parseLong(dto.getOrdQty());    // 매수 수량
                 return price * qty;
             } catch (NumberFormatException e) {
@@ -427,5 +465,43 @@ public class AutoTradeService {
                 return 0L;
             }
         }).sum();
+    }
+
+    /**
+     * 주어진 DTO 리스트에서 티커 추출, KIS 마스터 정보를 조회.
+     * 티커를 Key, 거래소 코드를 Value로 하는 Map을 반환.
+     */
+    private Map<String, StockInfoDto> getKisMasterInfoMap(List<OverseasStockDto> stockDtos) {
+        if (stockDtos == null || stockDtos.isEmpty()) {
+            return Collections.emptyMap(); // 빈 리스트면 빈 맵 반환
+        }
+
+        // 1. 티커 목록 추출
+        List<String> tickers = stockDtos.stream()
+                .map(OverseasStockDto::getSymb) // symb 필드 사용
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (tickers.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        try {
+            // 2. 거래소 정보 일괄 조회
+            List<StockInfoDto> stockInfos = kisMasterClientService.getStockMasterInfo(tickers);
+
+            // 3. 티커-거래소ID 맵 생성 및 반환
+            return stockInfos.stream()
+                    .filter(info -> info.symbol() != null && !info.symbol().isEmpty()) // 유효한 symbol만
+                    .collect(Collectors.toMap(
+                            StockInfoDto::symbol,
+                            info -> info,
+                            (existing, replacement) -> existing // 중복 시 첫번째 값 사용
+                    ));
+
+        } catch (Exception e) {
+            log.error("Error fetching KIS master info", e);
+            return Collections.emptyMap();
+        }
     }
 }

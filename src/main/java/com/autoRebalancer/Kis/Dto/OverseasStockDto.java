@@ -80,7 +80,7 @@ public class OverseasStockDto {
     // 해외주문단가
     String ovrsOrdUnpr;
     // 주문서버 구분코드
-    String ordSvrDvsnCd;
+    String ordSvrDvsnCd = "0";
     // 주문구분
     //[Header tr_id TTTT1002U(미국 매수 주문)]
     //00 : 지정가
@@ -112,15 +112,15 @@ public class OverseasStockDto {
     // 주문종료일자
     String ordEndDt;
     // 매도매수구분
-    String sllBuyDvsnCd;
+    String sllBuyDvsn;
     // 체결미체결구분
     String ccldNccsDvsn;
     // 정렬순서
     String sortSqn;
     // 주문일자
-    String ordDt;
+    String ordDt = "";
     // 주문채번지점번호
-    String ordGnoBrno;
+    String ordGnoBrno = "";
     // 주문번호
-    String ordNo;
+    String ordNo = "";
 }
