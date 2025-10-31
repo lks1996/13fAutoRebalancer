@@ -3,7 +3,6 @@ package com.autoRebalancer.KisMasterUpdater.Service;
 import com.autoRebalancer.KisMasterUpdater.Dto.StockInfoDto;
 import com.autoRebalancer.Common.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -16,9 +15,6 @@ import java.util.List;
 @Slf4j
 public class KisMasterClientService {
     private final WebClient webClient;
-
-    @Value("${kis.master.api.url}")
-    private String kisApiUrl;
 
     public KisMasterClientService(WebClient webClient) { // 생성자에서 WebClient 받기
         this.webClient = webClient;
@@ -39,7 +35,7 @@ public class KisMasterClientService {
             Mono<ApiResponse<List<StockInfoDto>>> responseMono = this.webClient
                     .get() // GET 요청
                     .uri(uriBuilder -> uriBuilder
-                            .path(kisApiUrl) // application.yml의 URL 사용
+                            .path("/api/master/stock-info")
                             .queryParam("symbols", String.join(",", symbols))
                             .build())
                     // .header("X-API-KEY", kisApiKey) // API 키 헤더가 필요하다면 추가

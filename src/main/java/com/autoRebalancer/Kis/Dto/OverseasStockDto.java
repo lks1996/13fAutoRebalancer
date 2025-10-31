@@ -123,4 +123,9 @@ public class OverseasStockDto {
     String ordGnoBrno = "";
     // 주문번호
     String ordNo = "";
+
+    /** kisMasterUpdater 마스터파일 종목 정보 */
+    // 평가금액
+    String evluAmt;
+
 }

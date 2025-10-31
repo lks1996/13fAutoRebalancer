@@ -2,6 +2,7 @@ package com.autoRebalancer.Common;
 
 import com.autoRebalancer.Common.Interceptor.ApiKeyInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -10,6 +11,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
+
+    @Value("${kis.master.api.base-url}")
+    private String kisApiBaseUrl;
 
     @Autowired
     private ApiKeyInterceptor apiKeyInterceptor;
@@ -21,9 +25,14 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**");
     }
 
+    // ▼▼▼ yml에서 base-url 값을 주입받습니다 ▼▼▼
+
+
     @Bean
     public WebClient webClient() {
         return WebClient.builder()
+                .baseUrl(kisApiBaseUrl) // 기본 URL 설정
+                // .defaultHeader("X-API-KEY", kisApiKey) // 공통 헤더가 있다면 여기서 설정
                 .build();
     }
 }
