@@ -28,6 +28,22 @@ public class OverseasStockController {
     }
 
     /**
+     * 해외증거금 통화별조회 - 모의투자는 지원하지 않음.
+     */
+    @GetMapping("/foreignMargin")
+    public void getOverseasStockForeignMargin(OverseasStockDto stockDto) {
+        overseasStockService.getForeignMargin(stockDto);
+    }
+
+    /**
+     * 해외주식 매수가능금액조회 - 특정 종목에 대한 매수가능 금액 조회.
+     */
+    @GetMapping("/psamount")
+    public void getOverseasStockPsamount() {
+        overseasStockService.getPsamount();
+    }
+
+    /**
      * 해외주식현재가 시세
      */
     @GetMapping("/inquirePrice")

@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class BalanceOutput2Dto {
+public class DomesticBalanceOutput2Dto {
 
     @JsonProperty("dnca_tot_amt")
     private String dncaTotAmt;

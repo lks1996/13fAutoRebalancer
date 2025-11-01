@@ -8,7 +8,7 @@ import java.util.List;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class StockBalanceResponseDto {
+public class DomesticStockBalanceResponseDto {
 
     @JsonProperty("rt_cd")
     private String rtCd;
@@ -26,8 +26,8 @@ public class StockBalanceResponseDto {
     private String ctxAreaNk100;
 
     @JsonProperty("output1")
-    private List<BalanceOutput1Dto> output1;
+    private List<DomesticBalanceOutput1Dto> output1;
 
     @JsonProperty("output2")
-    private List<BalanceOutput2Dto> output2;
+    private List<DomesticBalanceOutput2Dto> output2;
 }

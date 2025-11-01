@@ -45,16 +45,16 @@ public class AutoTradeService {
         List<SheetDto> sheetList = parseSheetData(sheetDataList);
 
         /** 2. 잔고 조회 */
-        StockBalanceResponseDto sbrDto= getCurrentBalance();
+        OverseasStockBalanceResponseDto sbrDto= getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
-        List<BalanceOutput1Dto> rawHoldingStocks = sbrDto.getOutput1();                    // 보유 중인 종목 조회.
-        long cashBalance = Long.parseLong(sbrDto.getOutput2().get(0).getDncaTotAmt());  // 보유 중인 예수금 조회.
+        List<OverseasBalanceOutput1Dto> rawHoldingStocks = sbrDto.getOutput1();             // 보유 중인 종목 조회.
+        long cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());    // 보유 중인 예수금 조회.
 
         log.warn("[WARN]실예수금 총액: {}", cashBalance);
 
         /// FOR TEST ///
         if(vprofile.equals("dev")){
-            cashBalance = 1000000;
+            cashBalance = 1000;
             log.warn("[WARN]테스트 예수금 총액: {}", cashBalance);
         }
         /// FOR TEST ///
@@ -67,7 +67,7 @@ public class AutoTradeService {
 
         // 2-2. 현재 보유 종목 티커 Set 생성
         Set<String> holdingTickers = rawHoldingStocks.stream()
-                .map(BalanceOutput1Dto::getPdno)
+                .map(OverseasBalanceOutput1Dto::getOvrsPdno)
                 .collect(Collectors.toSet());
 
         // 2-3. 두 목록을 합쳐 유일한 '전체 티커 리스트' 생성
@@ -128,7 +128,7 @@ public class AutoTradeService {
         holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
 
         if(vprofile.equals("prod")) {
-            cashBalance = Long.parseLong(sbrDto.getOutput2().get(0).getDncaTotAmt());   // 미보유 매수 후 남은 실제 예수금 확인.
+            cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());   // 미보유 매수 후 남은 실제 예수금 확인.
         }
 
         // 4-2. 추가 매수 필요 리스트 추출.
@@ -172,12 +172,29 @@ public class AutoTradeService {
         return resultList;
     }
 
-    private StockBalanceResponseDto getCurrentBalance() throws Exception{
+    /**
+     * 해외주식 잔고 조회(보유종목)
+     * @return OverseasStockBalanceResponseDto
+     */
+    private OverseasStockBalanceResponseDto getCurrentBalance() throws Exception{
         OverseasStockDto requestDto = new OverseasStockDto();
         String balancerResponse = overseasStockService.getBalance(requestDto);
 
         ObjectMapper mapper = new ObjectMapper();
-        StockBalanceResponseDto resultDto = mapper.readValue(balancerResponse, StockBalanceResponseDto.class);
+        OverseasStockBalanceResponseDto resultDto = mapper.readValue(balancerResponse, OverseasStockBalanceResponseDto.class);
+
+        return resultDto;
+    }
+
+    /**
+     * 해외주식 매수가능금액 조회.
+     * @return OverseasStockBalanceResponseDto
+     */
+    private OverseasPsblAmountOutputDto getCurrentCashBalance() throws Exception{
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(overseasStockService.getPsamount());
+        JsonNode outputNode = rootNode.path("output");
+        OverseasPsblAmountOutputDto resultDto = mapper.treeToValue(outputNode, OverseasPsblAmountOutputDto.class);
 
         return resultDto;
     }
@@ -185,14 +202,14 @@ public class AutoTradeService {
     /**
      * 잔고 응답 유효성 체크
      * @param sbrDto
-     * @return
+     * @return boolean
      */
-    private boolean StockBalanceResponseCheck(StockBalanceResponseDto sbrDto){
+    private boolean StockBalanceResponseCheck(OverseasStockBalanceResponseDto sbrDto){
         if( sbrDto.getOutput1()==null || sbrDto.getOutput2()==null ){
             log.error("[ERROR] 잔고 조회 실패. output1 혹은 output2가 null.");
             return false;
-        } else if ( sbrDto.getOutput1().isEmpty() || sbrDto.getOutput2().isEmpty() ) {
-            log.error("[ERROR] 잔고 조회 실패. output1 혹은 output2가 비어있음.");
+        } else if ( sbrDto.getOutput1().isEmpty() ) {
+            log.error("[ERROR] 잔고 조회 실패. output1가 비어있음.");
             return false;
         }
         return true;
@@ -228,7 +245,7 @@ public class AutoTradeService {
      */
     private long getPortfolioTotal(List<OverseasStockDto> holdingStocks, long cashBalance) {
         return holdingStocks.stream()
-                .mapToLong(h -> Long.parseLong(h.getEvluAmt()))
+                .mapToLong(h -> Parser.safeParseLong(h.getEvluAmt()))
                 .sum() + cashBalance;
     }
 
@@ -341,21 +358,21 @@ public class AutoTradeService {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 // 현재 잔고 조회
-                StockBalanceResponseDto sbrDto = getCurrentBalance();
+                OverseasStockBalanceResponseDto sbrDto = getCurrentBalance();
                 if(!StockBalanceResponseCheck(sbrDto)) return false;
 
-                List<BalanceOutput1Dto> holdingStocks = sbrDto.getOutput1();
+                List<OverseasBalanceOutput1Dto> holdingStocks = sbrDto.getOutput1();
 
                 // 모든 toBuyList 종목이 원하는 수량 이상 보유하고 있는지 확인.
                 boolean isAllBought = toBuyList.stream().allMatch(toBuy -> {
-                    BalanceOutput1Dto matched = holdingStocks.stream()
-                            .filter(h -> h.getPdno().equals(toBuy.getSymb()))
+                    OverseasBalanceOutput1Dto matched = holdingStocks.stream()
+                            .filter(h -> h.getOvrsPdno().equals(toBuy.getSymb()))
                             .findFirst()
                             .orElse(null);
 
                     if (matched == null) return false;
 
-                    int holdingQty = Integer.parseInt(matched.getHldgQty()); // 현재 보유 수량
+                    int holdingQty = Integer.parseInt(matched.getOrdPsblQty()); // 현재 매도 가능 수량
                     int expectedQty = Integer.parseInt(toBuy.getOrdQty());   // 매수 요청 수량
                     return holdingQty >= expectedQty;
                 });
@@ -400,7 +417,7 @@ public class AutoTradeService {
             }
 
             String stockCode = holding.getSymb();
-            long evalAmt = Long.parseLong(holding.getEvluAmt());
+            long evalAmt = Parser.safeParseLong(holding.getEvluAmt());
 
             // 포트폴리오 목표 비율 추출.
             double targetRatio = sheetList.stream()
@@ -424,7 +441,7 @@ public class AutoTradeService {
 
                 // 현재가 조회.
                 StockPriceResponseDto sprDto = getCurrentStockPrice(stockCode, holding.getOvrsExcgCd());
-                long stockPrice = Long.parseLong(sprDto.getLast());
+                long stockPrice = Parser.safeParseLong(sprDto.getLast());
 
                 // 수량 계산. (0주 허용)
                 long quantityToBuy = shortageAmount / stockPrice;
@@ -520,27 +537,27 @@ public class AutoTradeService {
      * @param balanceList KIS 잔고 API 원본 응답 (output1)
      * @return 마스터 정보가 모두 포함된 OverseasStockDto 리스트
      */
-    private List<OverseasStockDto> getEnrichedHoldingStocks(List<BalanceOutput1Dto> balanceList, Map<String, StockInfoDto> stockInfoMap) {
+    private List<OverseasStockDto> getEnrichedHoldingStocks(List<OverseasBalanceOutput1Dto> balanceList, Map<String, StockInfoDto> stockInfoMap) {
         if (balanceList == null || balanceList.isEmpty()) {
             return new ArrayList<>();
         }
 
         List<OverseasStockDto> enrichedList = new ArrayList<>();
-        for (BalanceOutput1Dto balance : balanceList) {
-            StockInfoDto info = stockInfoMap.get(balance.getPdno()); // API 호출 대신 Map에서 조회
+        for (OverseasBalanceOutput1Dto balance : balanceList) {
+            StockInfoDto info = stockInfoMap.get(balance.getOvrsPdno()); // API 호출 대신 Map에서 조회
 
             String exchangeId = (info != null) ? info.exchangeId() : "";
             String stockName = (info != null && info.koreanName() != null && !info.koreanName().isEmpty())
-                    ? info.koreanName() : balance.getPrdtName();
+                    ? info.koreanName() : balance.getOvrsItemName();
             String currency = (info != null) ? info.currency() : "";
 
             enrichedList.add(OverseasStockDto.builder()
-                    .symb(balance.getPdno())
+                    .symb(balance.getOvrsPdno())
                     .symbName(stockName)
                     .ovrsExcgCd(exchangeId)
                     .trCrctCd(currency)
-                    .ordQty(balance.getHldgQty())
-                    .evluAmt(balance.getEvluAmt())
+                    .ordQty(balance.getOrdPsblQty())    // 현재 매도 가능 수량
+                    .evluAmt(balance.getOvrsStckEvluAmt())
                     .build());
         }
         return enrichedList;

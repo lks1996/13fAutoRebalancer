@@ -35,7 +35,7 @@ public class OverseasStockDto {
     //    TKSE : 일본
     //    HASE : 베트남 하노이
     //    VNSE : 베트남 호치민
-    String ovrsExcgCd;
+    String ovrsExcgCd = "NASD";
 
     // 거래통화코드
     //    USD : 미국달러
@@ -80,7 +80,7 @@ public class OverseasStockDto {
     // 해외주문단가
     String ovrsOrdUnpr;
     // 주문서버 구분코드
-    String ordSvrDvsnCd = "0";
+    String ordSvrDvsnCd = "";
     // 주문구분
     //[Header tr_id TTTT1002U(미국 매수 주문)]
     //00 : 지정가

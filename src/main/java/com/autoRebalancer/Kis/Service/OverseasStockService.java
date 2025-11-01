@@ -43,6 +43,10 @@ public class OverseasStockService {
 
     // 주식잔고조회_해외주식
     private final String urlBalance = "/uapi/overseas-stock/v1/trading/inquire-balance";
+    //
+    private final String urlForeignMargin = "/uapi/overseas-stock/v1/trading/foreign-margin";
+    // 해외주식 매수가능 금액 조회
+    private final String urlPsamount = "/uapi/overseas-stock/v1/trading/inquire-psamount";
     // 해외주식 현재체결가[v1_해외주식-009]
     private final String urlInquirePrice = "/uapi/overseas-price/v1/quotations/price";
     // 해외주식 주문[v1_해외주식-001]
@@ -84,7 +88,7 @@ public class OverseasStockService {
                 .queryParam("OVRS_EXCG_CD", stockDto.getOvrsExcgCd())                   // 해외거래소코드
                 .queryParam("TR_CRCY_CD", stockDto.getTrCrctCd())                       // 거래통화코드
                 .queryParam("CTX_AREA_FK200", stockDto.getCtxAreaFk200())               // 연속조회검색조건 200
-                .queryParam("CTX_AREA_NK300", stockDto.getCtxAreaNk200());              // 연속조회키 200
+                .queryParam("CTX_AREA_NK200", stockDto.getCtxAreaNk200());              // 연속조회키 200
 
         HttpEntity<?> entity = new HttpEntity<>(headers);
 
@@ -94,8 +98,96 @@ public class OverseasStockService {
                 entity,
                 String.class);
 
-        log.debug(" response.getBody(): {}",  response.getBody());
+        log.info(" response.getBody(): {}",  response.getBody());
         log.info("[OverseasStockService.getBalance succeed.]");
+
+        // 테스트 호출 시 호출 제한이 있음.
+        if(vprofile.equals("dev")){
+            try {
+                // 2초 대기
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Thread sleep interrupted", e);
+            }
+        }
+
+        return response.getBody();
+    }
+
+    /**
+     * 해외증거금 통화별조회
+     * (모의투자는 지원하지 않으므로 실전 전용.)
+     * @return
+     */
+    @RequireValidToken
+    public String getForeignMargin(OverseasStockDto stockDto) {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = getHttpHeaders();
+
+        headers.set("custtype", "P");// 고객 타입 (B: 법인 , P: 개인)
+        if(vprofile.equals("prod")) {
+            headers.set("tr_id", "TTTC2101R");  // 실전용
+        } else {
+            headers.set("tr_id", "");  // 모의 지원하지 않음.
+            log.error("해외증거금 통화별조회는 모의투자를 지원하지 않음.");
+            return null;
+        }
+
+        // 해외증거금 통화별조회 [해외주식-035]
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(DOMAIN + urlForeignMargin)
+                .queryParam("CANO", CANO)                   // 종합계좌번호
+                .queryParam("ACNT_PRDT_CD", ACNT_PRDT_CD);  // 계좌상품코드
+
+        HttpEntity<?> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                builder.toUriString(),
+                HttpMethod.GET,
+                entity,
+                String.class);
+
+        log.info(" response.getBody(): {}",  response.getBody());
+        log.info("[OverseasStockService.getForeignMargin succeed.]");
+
+        return response.getBody();
+    }
+
+    /**
+     * 해외주식 매수가능금액조회 - 특정 종목에 대한 매수가능 금액 조회.
+     * (모의투자의 경우 외화 예수금 조회가 불가하여, 대체용도로 사용.)
+     * @return
+     */
+    @RequireValidToken
+    public String getPsamount() {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = getHttpHeaders();
+
+        if(vprofile.equals("prod")) {
+            headers.set("tr_id", "TTTS3007R");  // 실전용
+        } else {
+            headers.set("tr_id", "VTTS3007R");  // 모의용
+        }
+
+        // 해외주식 매수가능금액조회[v1_해외주식-014]
+        // 해외예수금 조회를 위한 서비스이므로, 거래소코드, 주문단가, 종목코드는 임의로 고정.
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(DOMAIN + urlPsamount)
+                .queryParam("CANO", CANO)                           // 종합계좌번호
+                .queryParam("ACNT_PRDT_CD", ACNT_PRDT_CD)           // 계좌상품코드
+                .queryParam("OVRS_EXCG_CD", "AMEX")         // 해외거래소코드 ( NASD : 나스닥 / NYSE : 뉴욕 / AMEX : 아멕스 / SEHK : 홍콩 / SHAA : 중국상해 / SZAA : 중국심천 / TKSE : 일본 / HASE : 하노이거래소 / VNSE : 호치민거래소 )
+                .queryParam("OVRS_ORD_UNPR", "100000")      // 해외주문단가 (23.8) 정수부분 23자리, 소수부분 8자리
+                .queryParam("ITEM_CD", "AAPL");             // 종목코드
+
+        HttpEntity<?> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                builder.toUriString(),
+                HttpMethod.GET,
+                entity,
+                String.class);
+
+        log.info(" response.getBody(): {}",  response.getBody());
+        log.info("[OverseasStockService.getPsamount succeed.]");
 
         // 테스트 호출 시 호출 제한이 있음.
         if(vprofile.equals("dev")){

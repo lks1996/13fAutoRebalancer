@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class BalanceOutput1Dto {
+public class DomesticBalanceOutput1Dto {
 
     // 종목코드(6자리)
     @JsonProperty("pdno")
