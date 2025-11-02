@@ -48,13 +48,13 @@ public class AutoTradeService {
         OverseasStockBalanceResponseDto sbrDto= getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
         List<OverseasBalanceOutput1Dto> rawHoldingStocks = sbrDto.getOutput1();             // 보유 중인 종목 조회.
-        long cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());    // 보유 중인 예수금 조회.
+        double cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());    // 보유 중인 예수금 조회.
 
         log.warn("[WARN]실예수금 총액: {}", cashBalance);
 
         /// FOR TEST ///
         if(vprofile.equals("dev")){
-            cashBalance = 1000;
+            cashBalance = 1000.0;
             log.warn("[WARN]테스트 예수금 총액: {}", cashBalance);
         }
         /// FOR TEST ///
@@ -95,7 +95,7 @@ public class AutoTradeService {
         if (!unholdingStockList.isEmpty()) {
             // 3-1. 전체 금액 계산.
             // 포트폴리오 총액 = 보유 종목 평가금액 합 + 예수금
-            long portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
+            double portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
 
             // 3-2. 미보유 종목 매수 필요 리스트 추출.
             List<OverseasStockDto> toBuyList = calculateUnholdingBuys(unholdingStockList, portfolioTotal, cashBalance, stockInfoMap);
@@ -164,7 +164,7 @@ public class AutoTradeService {
             String stockCode = row.size() > 0 ? row.get(0).toString().trim() : "";
             String stockName = row.size() > 1 ? row.get(1).toString().trim() : "";
             long sshPrnamt = row.size() > 2 ? Parser.safeParseLong(row.get(2)) : 0;
-            long value = row.size() > 3 ? Parser.safeParseLong(row.get(3)) : 0;;
+            double value = row.size() > 3 ? Parser.safeParseLong(row.get(3)) : 0;;
             double targetRatio = row.size() > 4 ? Parser.safeParseDouble(row.get(4)) : 0.0;
 
             resultList.add(new SheetDto("", stockCode, stockName, sshPrnamt, value, targetRatio));
@@ -243,10 +243,12 @@ public class AutoTradeService {
      * @param cashBalance 현금 예수금
      * @return result
      */
-    private long getPortfolioTotal(List<OverseasStockDto> holdingStocks, long cashBalance) {
-        return holdingStocks.stream()
-                .mapToLong(h -> Parser.safeParseLong(h.getEvluAmt()))
-                .sum() + cashBalance;
+    private double getPortfolioTotal(List<OverseasStockDto> holdingStocks, double cashBalance) {
+        double holdingStockValue = holdingStocks.stream()
+                .mapToDouble(h -> Parser.safeParseDouble(h.getEvluAmt()))
+                .sum();
+        log.info("[INFO] 총 보유주식 평가금액: {}, 현금 예수금: {}, 총 포트폴리오 가치: {}", holdingStockValue, cashBalance, holdingStockValue + cashBalance);
+        return holdingStockValue + cashBalance;
     }
 
     /**
@@ -256,7 +258,7 @@ public class AutoTradeService {
      * @return resultList 매수 대상 종목 리스트
      * @throws Exception
      */
-    private List<OverseasStockDto> calculateUnholdingBuys(List<SheetDto> unholdingStockList, long portfolioTotal, long cashBalance, Map<String, StockInfoDto> stockInfoMap) throws Exception {
+    private List<OverseasStockDto> calculateUnholdingBuys(List<SheetDto> unholdingStockList, double portfolioTotal, double cashBalance, Map<String, StockInfoDto> stockInfoMap) throws Exception {
 
         List<OverseasStockDto> resultList = new ArrayList<>();
         List<Map<String, Object>> resultLogList = new ArrayList<>();
@@ -267,13 +269,14 @@ public class AutoTradeService {
             StockInfoDto stockInfo = stockInfoMap.get(symbol);
 
             // 목표 금액 = 포트폴리오 총액 * 목표 비중
-            long targetAmount = (long)Math.floor(portfolioTotal * (p.getTargetRatio() / 100.0));
+            double targetAmount = portfolioTotal * (p.getTargetRatio() / 100.0);
 
             // 미보유 종목이므로 현재 보유금액은 0
-            long currentHoldingAmount = 0L;
+            double currentHoldingAmount = 0.0;
 
             // 부족분 = 목표 금액 - 현재 보유 금액
-            long needToBuyAmount = targetAmount - currentHoldingAmount;
+            double needToBuyAmount = targetAmount - currentHoldingAmount;
+
             if (needToBuyAmount > cashBalance) {
                 needToBuyAmount = cashBalance;
             }
@@ -293,7 +296,6 @@ public class AutoTradeService {
 
             long quantityToBuy = 0;
             if (stockPrice > 0 && needToBuyAmount >= stockPrice) {
-//                quantityToBuy = needToBuyAmount / stockPrice;
                 quantityToBuy = (long) Math.floor(needToBuyAmount / stockPrice);
             }
 
@@ -324,13 +326,13 @@ public class AutoTradeService {
         log.info("===미보유 종목 존재===");
 
         // 결과 출력 ( 종목명, 종목코드, 구매금액, 실제 구매비율 )
-        long sumNeedToBuyAmount = resultLogList.stream()
-                .mapToLong(m -> (long) m.get("needToBuyAmount"))
+        double sumNeedToBuyAmount = resultLogList.stream()
+                .mapToDouble(m -> (double) m.get("needToBuyAmount"))
                 .sum();
 
         for (Map<String, Object> res : resultLogList) {
             double buyRatio = sumNeedToBuyAmount > 0
-                    ? ((long) res.get("needToBuyAmount") * 100.0) / sumNeedToBuyAmount
+                    ? ((double) res.get("needToBuyAmount") * 100.0) / sumNeedToBuyAmount
                     : 0.0;
             res.put("buyRatio", buyRatio);
 
@@ -372,8 +374,8 @@ public class AutoTradeService {
 
                     if (matched == null) return false;
 
-                    int holdingQty = Integer.parseInt(matched.getOrdPsblQty()); // 현재 매도 가능 수량
-                    int expectedQty = Integer.parseInt(toBuy.getOrdQty());   // 매수 요청 수량
+                    long holdingQty = Integer.parseInt(matched.getOrdPsblQty()); // 현재 매도 가능 수량
+                    long expectedQty = Integer.parseInt(toBuy.getOrdQty());   // 매수 요청 수량
                     return holdingQty >= expectedQty;
                 });
 
@@ -403,9 +405,9 @@ public class AutoTradeService {
      * @return resultList 매수 대상 종목 리스트
      * @throws Exception
      */
-    private List<OverseasStockDto> calculateRebalanceBuys(List<OverseasStockDto> holdingStocks, List<SheetDto> sheetList, long cashBalance) throws Exception {
+    private List<OverseasStockDto> calculateRebalanceBuys(List<OverseasStockDto> holdingStocks, List<SheetDto> sheetList, double cashBalance) throws Exception {
         // 1. 총 평가 금액 계산. (보유 종목 평가금 + 예수금)
-        long totalEvalAmount = getPortfolioTotal(holdingStocks, cashBalance);
+        double totalEvalAmount = getPortfolioTotal(holdingStocks, cashBalance);
 
         // 2. 비율 비교 후 부족분 매수.
         List<OverseasStockDto> resultList = new ArrayList<>();
@@ -417,7 +419,7 @@ public class AutoTradeService {
             }
 
             String stockCode = holding.getSymb();
-            long evalAmt = Parser.safeParseLong(holding.getEvluAmt());
+            double evalAmt = Parser.safeParseDouble(holding.getEvluAmt());
 
             // 포트폴리오 목표 비율 추출.
             double targetRatio = sheetList.stream()
@@ -426,13 +428,15 @@ public class AutoTradeService {
                     .findFirst()
                     .orElse(0.0);
 
+            if (evalAmt <= 0) continue; // 평가금액 0 이하면 계산 무시
+
             // 현재 비율 계산.
-            double currentRatio = (evalAmt / (double) totalEvalAmount) * 100.0;
+            double currentRatio = (evalAmt / totalEvalAmount) * 100.0;
 
             // 목표 비중 보다 낮을 때만 매수 진행.
             if (currentRatio < targetRatio) {
                 double shortageRatio = targetRatio - currentRatio;                              // 목표비중 - 현재비중
-                long shortageAmount = Math.round(totalEvalAmount * (shortageRatio / 100.0));    // 목표 비중에 도달하기 위해 필요한 추가 매수 금액.
+                double shortageAmount = totalEvalAmount * (shortageRatio / 100.0);    // 목표 비중에 도달하기 위해 필요한 추가 매수 금액.
 
                 // 잔액 초과 방지.( 추가 매수 필요 금액보다 예수금이 적은 경우 예수금에 맞게 매수되도록 금액 조정. )
                 if (shortageAmount > cashBalance) {
@@ -441,10 +445,10 @@ public class AutoTradeService {
 
                 // 현재가 조회.
                 StockPriceResponseDto sprDto = getCurrentStockPrice(stockCode, holding.getOvrsExcgCd());
-                long stockPrice = Parser.safeParseLong(sprDto.getLast());
+                double stockPrice = Parser.safeParseDouble(sprDto.getLast());
 
                 // 수량 계산. (0주 허용)
-                long quantityToBuy = shortageAmount / stockPrice;
+                long quantityToBuy = (long) Math.floor(shortageAmount / stockPrice);
 
                 // 수량이 0 초과인 경우에만 매수 리스트에 추가.
                 if (quantityToBuy > 0) {
@@ -459,7 +463,7 @@ public class AutoTradeService {
                             .build()
                     );
 
-                    long buyCost = quantityToBuy * stockPrice;
+                    double buyCost = quantityToBuy * stockPrice;
                     cashBalance -= buyCost;
 
                     log.info("[INFO] 보유 종목 비율 조정 매수: {} ({}) ({}주, {}원), 남은 예수금: {}원",
@@ -476,7 +480,7 @@ public class AutoTradeService {
             if (Validator.isValidOverseasOrder(order)) {
                 try {
                     overseasStockService.orderOverseasStock(order);
-                    log.info("[INFO] Order placed: {}", orders);
+                    log.info("[INFO] Order placed: {}", order);
 
                 } catch (Exception e) {
                     log.error("[ERROR] Failed to place order for {}: {}", order.getSymb(), e.getMessage());
@@ -487,17 +491,18 @@ public class AutoTradeService {
         }
     }
 
-    private long computeEstimateRestCashBalance(long cashBalance, List<OverseasStockDto> orders) throws Exception {
-        return cashBalance - orders.stream().mapToLong(dto -> {
+    private double computeEstimateRestCashBalance(double cashBalance, List<OverseasStockDto> orders) throws Exception {
+        double totalOrderCost = orders.stream().mapToDouble(dto -> {
             try {
-                long price = Long.parseLong(dto.getOvrsOrdUnpr()); // 매수 단가
-                long qty = Long.parseLong(dto.getOrdQty());    // 매수 수량
+                double price = Double.parseDouble(dto.getOvrsOrdUnpr());
+                long qty = Long.parseLong(dto.getOrdQty());
                 return price * qty;
             } catch (NumberFormatException e) {
-                // 숫자 변환 실패 시 0 처리
-                return 0L;
+                return 0.0;
             }
         }).sum();
+
+        return cashBalance - totalOrderCost;
     }
 
     /**

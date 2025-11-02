@@ -15,7 +15,7 @@ public class SheetDto {
     // 보유 주식 수
     long sshPrnamt;
     // 가치
-    long value;
+    double value;
     // 종목별 희망 비율
     double targetRatio;
 
@@ -24,7 +24,7 @@ public class SheetDto {
             , String stockCode
             , String stockName
             , long sshPrnamt
-            , long value
+            , double value
             , double targetRatio
     ) {
         this.accountType = accountType;
