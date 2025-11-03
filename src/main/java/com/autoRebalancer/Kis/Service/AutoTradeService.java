@@ -20,16 +20,13 @@ import java.util.stream.Collectors;
 @Service
 public class AutoTradeService {
 
-    private final DomesticStockService domesticStockService;
     private final SheetDataImportService sheetDataImportService;
     private final OverseasStockService overseasStockService;
     private final KisMasterClientService kisMasterClientService;
 
-    public AutoTradeService(DomesticStockService domesticStockService
-            , SheetDataImportService sheetDataImportService
+    public AutoTradeService(SheetDataImportService sheetDataImportService
             , OverseasStockService overseasStockService
             , KisMasterClientService kisMasterClientService, KisMasterClientService kisMasterClient) {
-        this.domesticStockService = domesticStockService;
         this.sheetDataImportService = sheetDataImportService;
         this.overseasStockService = overseasStockService;
         this.kisMasterClientService = kisMasterClientService;
@@ -48,7 +45,7 @@ public class AutoTradeService {
         OverseasStockBalanceResponseDto sbrDto= getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
         List<OverseasBalanceOutput1Dto> rawHoldingStocks = sbrDto.getOutput1();             // 보유 중인 종목 조회.
-        double cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());    // 보유 중인 예수금 조회.
+        double cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());    // 보유 중인 예수금 조회.
 
         log.warn("[WARN]실예수금 총액: {}", cashBalance);
 
@@ -80,10 +77,48 @@ public class AutoTradeService {
         // 2-4 마스터 맵을 주입하여 보유 종목 변환.
         List<OverseasStockDto> holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
 
+        // 매도 로직을 위한 포트폴리오 총액 선계산
+        double portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
 
+        /** 3. 매도 필요 종목 추출 및 매도 진행 */
+        // 3-1. 포트폴리오 비중과 비교하여 매도(전량/일부) 필요 리스트 추출
+        log.info("[INFO] 매도 필요 종목 계산 시작 (포트폴리오 총액: {})...", portfolioTotal);
+        List<OverseasStockDto> toSellList = calculateSellOrders(holdingStocks, sheetList, portfolioTotal, stockInfoMap);
 
-        /** 3. 보유하고 있지 않은 종목이 있다면, 해당 종목을 먼저 구매함.(단, 보유 중인 종목은 지정된 비율만큼 이미 보유하고 있다고 가정.) */
-        // 3-1. 미보유 종목 추출.( 미보유 종목이더라도 목표비중이 0이라면 제외함. )
+        if (!toSellList.isEmpty()) {
+            log.warn("[WARN] 총 {}개의 종목에 대한 매도 주문을 시작합니다.", toSellList.size());
+            // 3-2. 매도 주문 실행 (orderType=1 (매도))
+            orderStocks(toSellList);
+
+            // 3-3. 매도 체결 대기
+            // 중요: 매도 후 현금 확보를 위해 잠시 대기합니다.
+            // 실서버(prod)에서는 체결 여부를 확인하는 'waitForSellCompletion' 구현을 권장합니다.
+            log.info("[INFO] 매도 주문 전송 완료. 체결 및 예수금 반영을 위해 10초 대기...");
+            Thread.sleep(10000); // 임시 대기
+
+            // 3-4. 매도 완료 후 잔고 및 현금 재조회 (필수)
+            log.info("[INFO] 매도 완료 후 잔고 및 현금 재조회...");
+            sbrDto = getCurrentBalance();
+            if(!StockBalanceResponseCheck(sbrDto)) return;
+            rawHoldingStocks = sbrDto.getOutput1();
+            holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
+
+            if(vprofile.equals("prod")) {
+                cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());
+                log.warn("[WARN] 매도 완료 후 실제 예수금: {}", cashBalance);
+            } else {
+                // dev 모드일 경우, 매도 금액만큼 가상으로 cashBalance를 늘려줘야 합니다.
+                // 이 부분은 테스트를 위해 단순화하거나, toSellList 기반으로 예상 수익을 더해야 합니다.
+                // 여기서는 prod가 아니면 기존 cashBalance를 유지한다고 가정합니다.
+                log.warn("[WARN] dev 모드. 매도 후 예수금은 변동되지 않았다고 가정.");
+            }
+
+        } else {
+            log.info("[INFO] 매도 필요 종목이 없습니다.");
+        }
+
+        /** 4. 보유하고 있지 않은 종목이 있다면, 해당 종목을 먼저 구매함.(단, 보유 중인 종목은 지정된 비율만큼 이미 보유하고 있다고 가정.) */
+        // 4-1. 미보유 종목 추출.( 미보유 종목이더라도 목표비중이 0이라면 제외함. )
         List<OverseasStockDto> tempHoldingStocks = holdingStocks;
         List<SheetDto> unholdingStockList = sheetList.stream()
                 .filter(sheet -> sheet.getTargetRatio() > 0)
@@ -93,23 +128,23 @@ public class AutoTradeService {
 
         // 미보유 종목이 존재한다면,
         if (!unholdingStockList.isEmpty()) {
-            // 3-1. 전체 금액 계산.
+            // 4-1. 전체 금액 계산.
             // 포트폴리오 총액 = 보유 종목 평가금액 합 + 예수금
-            double portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
+            portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
 
-            // 3-2. 미보유 종목 매수 필요 리스트 추출.
+            // 4-2. 미보유 종목 매수 필요 리스트 추출.
             List<OverseasStockDto> toBuyList = calculateUnholdingBuys(unholdingStockList, portfolioTotal, cashBalance, stockInfoMap);
 
             if (!toBuyList.isEmpty()) {
 
-                // 3-3. 추가 매수가 필요한 종목 주문.
+                // 4-3. 추가 매수가 필요한 종목 주문.
                 orderStocks(toBuyList);
 
-                // 3-4. 잔존 예상 예수금 계산.
+                // 4-4. 잔존 예상 예수금 계산.
                 cashBalance = computeEstimateRestCashBalance(cashBalance, toBuyList);
                 log.warn("[WARN]미보유 종목 매수 후 예상 예수금 총액: {}", cashBalance);
 
-                // 3-4. 미보유 종목이 매수되었는지 확인.
+                // 4-4. 미보유 종목이 매수되었는지 확인.
                 // 5초 간격으로 10번 확인.
                 boolean buyCompleted = waitForBuyCompletion(toBuyList, 10, 5000);
 
@@ -119,8 +154,8 @@ public class AutoTradeService {
             }
         }
 
-        /** 4. 이후에 보유 종목에 대해 포트폴리오 비율과 비교하여 추가 매수 진행.(보유 종목의 현재 비율은 내림 처리.) */
-        // 4-1. 잔고 재조회.
+        /** 5. 이후에 보유 종목에 대해 포트폴리오 비율과 비교하여 추가 매수 진행.(보유 종목의 현재 비율은 내림 처리.) */
+        // 5-1. 잔고 재조회.
         sbrDto = getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
 
@@ -128,16 +163,16 @@ public class AutoTradeService {
         holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
 
         if(vprofile.equals("prod")) {
-            cashBalance = Parser.safeParseLong(getCurrentCashBalance().getFrcrOrdPsblAmt1());   // 미보유 매수 후 남은 실제 예수금 확인.
+            cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());   // 미보유 매수 후 남은 실제 예수금 확인.
         }
 
-        // 4-2. 추가 매수 필요 리스트 추출.
+        // 5-2. 추가 매수 필요 리스트 추출.
         List<OverseasStockDto> rebalanceBuyList = calculateRebalanceBuys(holdingStocks, sheetList, cashBalance);
 
         if (!rebalanceBuyList.isEmpty()) {
-            // 4-3. 추가 매수가 필요한 종목 주문.
+            // 5-3. 추가 매수가 필요한 종목 주문.
             orderStocks(rebalanceBuyList);
-            // 4-4. 잔존 예상 예수금 계산.
+            // 5-4. 잔존 예상 예수금 계산.
             cashBalance = computeEstimateRestCashBalance(cashBalance, rebalanceBuyList);
         }
 
@@ -164,7 +199,7 @@ public class AutoTradeService {
             String stockCode = row.size() > 0 ? row.get(0).toString().trim() : "";
             String stockName = row.size() > 1 ? row.get(1).toString().trim() : "";
             long sshPrnamt = row.size() > 2 ? Parser.safeParseLong(row.get(2)) : 0;
-            double value = row.size() > 3 ? Parser.safeParseLong(row.get(3)) : 0;;
+            double value = row.size() > 3 ? Parser.safeParseDouble(row.get(3)) : 0;;
             double targetRatio = row.size() > 4 ? Parser.safeParseDouble(row.get(4)) : 0.0;
 
             resultList.add(new SheetDto("", stockCode, stockName, sshPrnamt, value, targetRatio));
@@ -396,6 +431,106 @@ public class AutoTradeService {
         return false;
     }
 
+    /**
+     * 보유 종목 중 매도 필요 종목 계산 (전량 매도 / 부분 매도).
+     * @param holdingStocks 현재 보유 종목 목록
+     * @param sheetList 포트폴리오 목표 비중 목록
+     * @param portfolioTotal 총 포트폴리오 가치
+     * @param stockInfoMap 마스터 정보 맵
+     * @return resultList 매도 대상 종목 리스트
+     * @throws Exception
+     */
+    private List<OverseasStockDto> calculateSellOrders(List<OverseasStockDto> holdingStocks, List<SheetDto> sheetList, double portfolioTotal, Map<String, StockInfoDto> stockInfoMap) throws Exception {
+
+        List<OverseasStockDto> resultList = new ArrayList<>();
+
+        // 목표 비중이 0보다 큰 '유효한' 티커 목록
+        Set<String> targetTickers = sheetList.stream()
+                .filter(s -> s.getTargetRatio() > 0)
+                .map(SheetDto::getStockCode)
+                .collect(Collectors.toSet());
+
+        for (OverseasStockDto holding : holdingStocks) {
+            String stockCode = holding.getSymb();
+            double currentAmount = Parser.safeParseDouble(holding.getEvluAmt());
+            long currentQty = Parser.safeParseLong(holding.getOrdQty()); // 현재 매도 가능(보유) 수량
+
+            if (currentAmount <= 0.0 || currentQty <= 0) continue; // 매도할 수량이 없음
+
+            StockInfoDto stockInfo = stockInfoMap.get(stockCode);
+            if (stockInfo == null) {
+                log.error("[ERROR] 매도 계산 중 {}의 마스터 정보 조회 실패.", stockCode);
+                continue;
+            }
+
+            // 현재가 조회 (매도 주문 시 지정가로 사용하기 위해)
+            StockPriceResponseDto sprDto = getCurrentStockPrice(stockCode, stockInfo.exchangeId());
+            double stockPrice = Parser.safeParseDouble(sprDto.getLast());
+
+            if (stockPrice <= 0) {
+                log.error("[ERROR] 매도 계산 중 {}의 현재가 조회 실패. (가격: {})", stockCode, sprDto.getLast());
+                continue;
+            }
+
+            // 1. 목표 비중 리스트에 없는(혹은 비중 0) 종목 (전량 매도)
+            if (!targetTickers.contains(stockCode)) {
+                log.warn("[WARN] 포트폴리오 이탈 종목(전량 매도): {} ({}주)", holding.getSymbName(), currentQty);
+                resultList.add(
+                        OverseasStockDto.builder()
+                                .ovrsExcgCd(holding.getOvrsExcgCd())
+                                .symb(stockCode)
+                                .symbName(holding.getSymbName())
+                                .ovrsOrdUnpr(String.valueOf(sprDto.getLast()))
+                                .ordQty(String.valueOf(currentQty))
+                                .ordDvsn("00")
+                                .orderType(1)
+                                .build()
+                );
+                continue;
+            }
+
+            // 2. 목표 비중이 있으나, 현재 비중이 목표 비중보다 높은 종목 (부분 매도)
+            double targetRatio = sheetList.stream()
+                    .filter(s -> s.getStockCode().equals(stockCode))
+                    .mapToDouble(SheetDto::getTargetRatio)
+                    .findFirst()
+                    .orElse(0.0);
+
+            double targetAmount = portfolioTotal * (targetRatio / 100.0);
+
+            // 현재 평가금액이 목표 금액보다 클 경우 (초과 보유)
+            if (currentAmount > targetAmount) {
+                double amountToSell = currentAmount - targetAmount; // 매도 필요 금액
+
+                // 매도 수량 계산 (소수점 버림)
+                long quantityToSell = (long) Math.floor(amountToSell / stockPrice);
+
+                // 매도할 수량이 0보다 크고, 보유 수량보다 적거나 같아야 함
+                if (quantityToSell > 0) {
+                    if (quantityToSell > currentQty) {
+                        quantityToSell = currentQty; // 계산상 오류로 보유 수량을 초과할 경우, 보유 수량만큼만 매도
+                        log.warn("[WARN] 계산된 매도 수량이 보유 수량을 초과. 보유 수량만큼(전량) 매도: {} ({}주)", stockCode, quantityToSell);
+                    }
+
+                    log.info("[INFO] 보유 종목 비율 조정 매도: {} ({}) ({}주, 약 {}원)", stockCode, holding.getSymbName(), quantityToSell, amountToSell);
+
+                    resultList.add(
+                            OverseasStockDto.builder()
+                                    .ovrsExcgCd(holding.getOvrsExcgCd())
+                                    .symb(stockCode)
+                                    .symbName(holding.getSymbName())
+                                    .ovrsOrdUnpr(String.valueOf(sprDto.getLast()))
+                                    .ordQty(String.valueOf(quantityToSell))
+                                    .ordDvsn("00")
+                                    .orderType(1)
+                                    .build()
+                    );
+
+                }
+            }
+        }
+        return resultList;
+    }
 
     /**
      * 보유 종목 중 추가 매수 필요 종목 계산.
@@ -406,11 +541,16 @@ public class AutoTradeService {
      * @throws Exception
      */
     private List<OverseasStockDto> calculateRebalanceBuys(List<OverseasStockDto> holdingStocks, List<SheetDto> sheetList, double cashBalance) throws Exception {
-        // 1. 총 평가 금액 계산. (보유 종목 평가금 + 예수금)
+        // 1. 매도/미보유 매수 후 갱신된 잔고기준 총 평가 금액 재계산. (보유 종목 평가금 + 예수금)
         double totalEvalAmount = getPortfolioTotal(holdingStocks, cashBalance);
 
         // 2. 비율 비교 후 부족분 매수.
         List<OverseasStockDto> resultList = new ArrayList<>();
+
+        if (holdingStocks.isEmpty()) { // 보유 종목 없으면 스킵
+            log.info("[INFO] 리밸런싱 매수 대상 보유 종목 없음.");
+            return resultList;
+        }
 
         for (OverseasStockDto holding : holdingStocks) {
             if (cashBalance <= 0) {
@@ -428,7 +568,7 @@ public class AutoTradeService {
                     .findFirst()
                     .orElse(0.0);
 
-            if (evalAmt <= 0) continue; // 평가금액 0 이하면 계산 무시
+            if ( targetRatio <= 0 || evalAmt <= 0 ) continue; // 평가금액 0 이하면 계산 무시
 
             // 현재 비율 계산.
             double currentRatio = (evalAmt / totalEvalAmount) * 100.0;
@@ -474,19 +614,24 @@ public class AutoTradeService {
         return resultList;
     }
 
+    /**
+     * 매수/매도 주문 실행
+     * OverseasStockDto의 orderType (1:매도, 2:매수)에 따라 주문 서비스 호출.
+     */
     private void orderStocks(List<OverseasStockDto> orders) throws Exception {
         for (OverseasStockDto order : orders) {
+            String orderAction = (order.getOrderType() == 1) ? "매도" : "매수";
 
             if (Validator.isValidOverseasOrder(order)) {
                 try {
                     overseasStockService.orderOverseasStock(order);
-                    log.info("[INFO] Order placed: {}", order);
+                    log.info("[INFO] {} 주문 전송: {}", orderAction, order);
 
                 } catch (Exception e) {
-                    log.error("[ERROR] Failed to place order for {}: {}", order.getSymb(), e.getMessage());
+                    log.error("[ERROR] {} 주문 실패 {}: {}", orderAction, order.getSymb(), e.getMessage());
                 }
             } else {
-                log.warn("[WARN] Invalid order skipped: {}", order);
+                log.warn("[WARN] 유효하지 않은 {} 주문(SKIP): {}", orderAction, order);
             }
         }
     }
