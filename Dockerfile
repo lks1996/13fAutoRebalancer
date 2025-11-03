@@ -28,6 +28,12 @@ RUN ./gradlew bootJar
 # 더 가볍고 안전한 JRE(Java Runtime Environment) 이미지를 사용
 FROM eclipse-temurin:17-jre-jammy
 
+# 타임존 설정 (한국시간)
+RUN apt-get update && apt-get install -y tzdata \
+    && ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime \
+    && echo "Asia/Seoul" > /etc/timezone \
+    && apt-get clean
+
 # 작업 디렉토리 설정
 WORKDIR /app
 
