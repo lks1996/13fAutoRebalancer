@@ -58,7 +58,7 @@ public class Validator {
     public static boolean isPositiveNumeric(String value) {
         if (isBlank(value)) return false;
         try {
-            return Long.parseLong(value) > 0;
+            return Double.parseDouble(value) > 0;
         } catch (NumberFormatException e) {
             return false;
         }
