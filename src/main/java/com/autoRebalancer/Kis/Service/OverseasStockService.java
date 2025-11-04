@@ -281,7 +281,7 @@ public class OverseasStockService {
         requestBody.put("PDNO", orderStock.getSymb());                      // 상품번호
         requestBody.put("ORD_QTY", orderStock.getOrdQty());                 // 주문수량
         requestBody.put("OVRS_ORD_UNPR", orderStock.getOvrsOrdUnpr());      // 해외주문단가
-        requestBody.put("ORD_SVR_DVSN_CD", orderStock.getOrdSvrDvsnCd());   // 주문서버구분코드
+        requestBody.put("ORD_SVR_DVSN_CD", "0");                            // 주문서버구분코드
         requestBody.put("ORD_DVSN", orderStock.getOrdDvsn());               // 주문구분
 
 
@@ -300,15 +300,6 @@ public class OverseasStockService {
         log.info("Headers: {}", headers);
         log.info("Request Body: {}", new ObjectMapper().writeValueAsString(requestBody));
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                DOMAIN + urlOrder,
-                HttpMethod.POST,
-                entity,
-                String.class);
-
-        log.info(" response.getBody(): {}",  response.getBody());
-        log.info("[OverSeasService.orderOverseasStock succeed.]");
-
         // 테스트 호출 시 호출 제한이 있음.
         if(vprofile.equals("dev")){
             try {
@@ -319,6 +310,15 @@ public class OverseasStockService {
                 log.error("Thread sleep interrupted", e);
             }
         }
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                DOMAIN + urlOrder,
+                HttpMethod.POST,
+                entity,
+                String.class);
+
+        log.info(" response.getBody(): {}",  response.getBody());
+        log.info("[OverSeasService.orderOverseasStock succeed.]");
     }
 
     /**

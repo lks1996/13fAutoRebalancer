@@ -37,11 +37,15 @@ public class AutoTradeService {
 
     public void execute() throws Exception {
 
-        /** 1. 구글 시트에서 목표 비중 가져오기 */
+        /**
+        * 1. 구글 시트에서 목표 비중 가져오기
+        */
         List<List<Object>> sheetDataList = sheetDataImportService.getSheetsData();
         List<SheetDto> sheetList = parseSheetData(sheetDataList);
 
-        /** 2. 잔고 조회 */
+        /**
+        * 2. 잔고 조회
+        */
         OverseasStockBalanceResponseDto sbrDto= getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
         List<OverseasBalanceOutput1Dto> rawHoldingStocks = sbrDto.getOutput1();             // 보유 중인 종목 조회.
@@ -77,27 +81,25 @@ public class AutoTradeService {
         // 2-4 마스터 맵을 주입하여 보유 종목 변환.
         List<OverseasStockDto> holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
 
-        // 매도 로직을 위한 포트폴리오 총액 선계산
+        // 2-5 매도 로직을 위한 포트폴리오 총액 선계산.
         double portfolioTotal = getPortfolioTotal(holdingStocks,  cashBalance);
 
-        /** 3. 매도 필요 종목 추출 및 매도 진행 */
+
+        /**
+        * 3. 매도 필요 종목 추출 및 매도 진행
+        */
         // 3-1. 포트폴리오 비중과 비교하여 매도(전량/일부) 필요 리스트 추출
         log.info("[INFO] 매도 필요 종목 계산 시작 (포트폴리오 총액: {})...", portfolioTotal);
         List<OverseasStockDto> toSellList = calculateSellOrders(holdingStocks, sheetList, portfolioTotal, stockInfoMap);
 
         if (!toSellList.isEmpty()) {
-            log.warn("[WARN] 총 {}개의 종목에 대한 매도 주문을 시작합니다.", toSellList.size());
+            log.warn("[WARN] 총 {}개의 종목에 대한 매도 주문 시작...", toSellList.size());
             // 3-2. 매도 주문 실행 (orderType=1 (매도))
             orderStocks(toSellList);
 
-            // 3-3. 매도 체결 대기
-            // 중요: 매도 후 현금 확보를 위해 잠시 대기합니다.
-            // 실서버(prod)에서는 체결 여부를 확인하는 'waitForSellCompletion' 구현을 권장합니다.
-            log.info("[INFO] 매도 주문 전송 완료. 체결 및 예수금 반영을 위해 10초 대기...");
-            Thread.sleep(10000); // 임시 대기
+            // 3-3. 매도 완료 후 잔고 및 현금 재조회
+            log.info("[INFO] 매도 체결 확인 완료. 잔고 및 현금 재조회...");
 
-            // 3-4. 매도 완료 후 잔고 및 현금 재조회 (필수)
-            log.info("[INFO] 매도 완료 후 잔고 및 현금 재조회...");
             sbrDto = getCurrentBalance();
             if(!StockBalanceResponseCheck(sbrDto)) return;
             rawHoldingStocks = sbrDto.getOutput1();
@@ -107,17 +109,25 @@ public class AutoTradeService {
                 cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());
                 log.warn("[WARN] 매도 완료 후 실제 예수금: {}", cashBalance);
             } else {
-                // dev 모드일 경우, 매도 금액만큼 가상으로 cashBalance를 늘려줘야 합니다.
-                // 이 부분은 테스트를 위해 단순화하거나, toSellList 기반으로 예상 수익을 더해야 합니다.
-                // 여기서는 prod가 아니면 기존 cashBalance를 유지한다고 가정합니다.
-                log.warn("[WARN] dev 모드. 매도 후 예수금은 변동되지 않았다고 가정.");
+                cashBalance = computeEstimateRestCashBalance(cashBalance, toSellList);
+                log.warn("[WARN] 매도 완료 후 테스트 예수금: {}", cashBalance);
+            }
+
+            // 3-4. 매도 체결 대기
+            // 중요: 'holdingStocks'는 매도 주문 '전'의 상태.
+            boolean sellCompleted = waitForTradeCompletion(toSellList, holdingStocks, 5, 5000);
+
+            if (!sellCompleted) {
+                log.warn("[WARN] 매도 후 예상 예수금 총액: {}", cashBalance);
             }
 
         } else {
             log.info("[INFO] 매도 필요 종목이 없습니다.");
         }
 
-        /** 4. 보유하고 있지 않은 종목이 있다면, 해당 종목을 먼저 구매함.(단, 보유 중인 종목은 지정된 비율만큼 이미 보유하고 있다고 가정.) */
+        /**
+        * 4. 보유하고 있지 않은 종목이 있다면, 해당 종목을 먼저 구매함.(단, 보유 중인 종목은 지정된 비율만큼 이미 보유하고 있다고 가정.)
+        */
         // 4-1. 미보유 종목 추출.( 미보유 종목이더라도 목표비중이 0이라면 제외함. )
         List<OverseasStockDto> tempHoldingStocks = holdingStocks;
         List<SheetDto> unholdingStockList = sheetList.stream()
@@ -144,9 +154,9 @@ public class AutoTradeService {
                 cashBalance = computeEstimateRestCashBalance(cashBalance, toBuyList);
                 log.warn("[WARN]미보유 종목 매수 후 예상 예수금 총액: {}", cashBalance);
 
-                // 4-4. 미보유 종목이 매수되었는지 확인.
-                // 5초 간격으로 10번 확인.
-                boolean buyCompleted = waitForBuyCompletion(toBuyList, 10, 5000);
+                // 4-5. 미보유 종목이 매수되었는지 확인.
+                // 중요: 'holdingStocks'는 매도 '후' & 미보유 매수 '전'의 상태.
+                boolean buyCompleted = waitForTradeCompletion(toBuyList, holdingStocks, 5, 5000);
 
                 if ( !buyCompleted ) {
                     log.warn("[WARN]미보유 종목 매수 미체결 상태로 리밸런싱 시작.");
@@ -154,16 +164,18 @@ public class AutoTradeService {
             }
         }
 
-        /** 5. 이후에 보유 종목에 대해 포트폴리오 비율과 비교하여 추가 매수 진행.(보유 종목의 현재 비율은 내림 처리.) */
+        /**
+        * 5. 이후에 보유 종목에 대해 포트폴리오 비율과 비교하여 추가 매수 진행.(보유 종목의 현재 비율은 내림 처리.)
+        */
         // 5-1. 잔고 재조회.
         sbrDto = getCurrentBalance();
         if(!StockBalanceResponseCheck(sbrDto)) return;
 
-        rawHoldingStocks = sbrDto.getOutput1();                                        // 미보유 매수 후 현재 보유 중인 종목 재확인.
+        rawHoldingStocks = sbrDto.getOutput1();     // 미보유 매수 후 현재 보유 중인 종목 재확인.
         holdingStocks = getEnrichedHoldingStocks(rawHoldingStocks, stockInfoMap);
 
         if(vprofile.equals("prod")) {
-            cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());   // 미보유 매수 후 남은 실제 예수금 확인.
+            cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());     // 미보유 매수 후 남은 실제 예수금 확인.
         }
 
         // 5-2. 추가 매수 필요 리스트 추출.
@@ -383,51 +395,95 @@ public class AutoTradeService {
     }
 
     /**
-     * 미보유 종목 매수 체결 확인.
-     * @param toBuyList 매수 필요 종목 리스트
-     * @param maxRetries 재시도 횟수
-     * @param intervalMillis 재시도 간격
-     * @return
+     * 미보유 종목 매수/매도 체결 확인.
+     * @param orderList             주문 리스트
+     * @param originalHoldingStocks 주문 '전'의 보유 종목 리스트
+     * @param maxRetries            재시도 횟수
+     * @param intervalMillis        재시도 간격
+     * @return boolean
      */
-    public boolean waitForBuyCompletion(List<OverseasStockDto> toBuyList, int maxRetries, long intervalMillis) {
-        ObjectMapper mapper = new ObjectMapper();
+    public boolean waitForTradeCompletion(List<OverseasStockDto> orderList, List<OverseasStockDto> originalHoldingStocks, int maxRetries, long intervalMillis) {
+
+        if (orderList == null || orderList.isEmpty()) {
+            log.info("[INFO] 체결 확인할 주문 내역이 없습니다.");
+            return true;
+        }
+
+        // 주문 타입 확인 (1:매도, 2:매수)
+        int orderType = orderList.get(0).getOrderType();
+        String tradeAction = (orderType == 1) ? "매도" : "매수";
+
+        // 주문 '전' 상태를 맵으로 변환 (조회용)
+        Map<String, Long> originalQtyMap = originalHoldingStocks.stream()
+                .collect(Collectors.toMap(
+                        OverseasStockDto::getSymb,
+                        h -> Parser.safeParseLong(h.getOrdQty()),
+                        (existing, replacement) -> existing // 혹시 모를 중복 티커 처리
+                ));
+
+        log.info("[INFO] {} 체결 대기 시작... (대상 {}건)", tradeAction, orderList.size());
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // 현재 잔고 조회
+                // 1. 현재 잔고 조회
                 OverseasStockBalanceResponseDto sbrDto = getCurrentBalance();
-                if(!StockBalanceResponseCheck(sbrDto)) return false;
+                if (!StockBalanceResponseCheck(sbrDto)) {
+                    log.error("[ERROR] {} 체결 확인 중 잔고 조회 실패 (output null). (시도 {}/{})", tradeAction, attempt, maxRetries);
+                    Thread.sleep(intervalMillis);
+                    continue;
+                }
 
-                List<OverseasBalanceOutput1Dto> holdingStocks = sbrDto.getOutput1();
+                // 2. 현재 보유 수량을 맵으로 변환 (ordPsblQty: 주문 가능 수량 기준)
+                Map<String, Long> currentQtyMap = sbrDto.getOutput1().stream()
+                        .collect(Collectors.toMap(
+                                OverseasBalanceOutput1Dto::getOvrsPdno,
+                                h -> Parser.safeParseLong(h.getOrdPsblQty()),
+                                (existing, replacement) -> existing
+                        ));
 
-                // 모든 toBuyList 종목이 원하는 수량 이상 보유하고 있는지 확인.
-                boolean isAllBought = toBuyList.stream().allMatch(toBuy -> {
-                    OverseasBalanceOutput1Dto matched = holdingStocks.stream()
-                            .filter(h -> h.getOvrsPdno().equals(toBuy.getSymb()))
-                            .findFirst()
-                            .orElse(null);
+                // 3. 모든 주문이 체결되었는지 확인
+                boolean isAllCompleted = orderList.stream().allMatch(order -> {
+                    String symbol = order.getSymb();
+                    long orderQty = Parser.safeParseLong(order.getOrdQty()); // 주문한 수량
+                    long originalQty = originalQtyMap.getOrDefault(symbol, 0L); // 주문 전 보유 수량
+                    long currentQty = currentQtyMap.getOrDefault(symbol, 0L);   // 현재 보유 수량
 
-                    if (matched == null) return false;
+                    if (orderType == 1) { // [매도 확인]
+                        long expectedQtyAfterSell = originalQty - orderQty;
+                        if (expectedQtyAfterSell < 0) expectedQtyAfterSell = 0; // (예: 보유량 5주인데 10주 매도 주문 -> 0주가 되어야 함)
 
-                    long holdingQty = Integer.parseInt(matched.getOrdPsblQty()); // 현재 매도 가능 수량
-                    long expectedQty = Integer.parseInt(toBuy.getOrdQty());   // 매수 요청 수량
-                    return holdingQty >= expectedQty;
+                        // 현재 수량이 (원래 수량 - 매도 수량)과 정확히 같아야 함
+                        return currentQty == expectedQtyAfterSell;
+
+                    } else { // [매수 확인] (orderType == 2)
+                        long expectedQtyAfterBuy = originalQty + orderQty;
+
+                        // 현재 수량이 (원래 수량 + 매수 수량)보다 크거나 같아야 함
+                        return currentQty >= expectedQtyAfterBuy;
+                    }
                 });
 
-                if (isAllBought) {
-                    log.warn("[INFO] 모든 매수 체결 완료 확인됨. 다음 프로세스로 진행.");
+                // 4. 결과 반환
+                if (isAllCompleted) {
+                    log.warn("[INFO] 모든 {} 체결 완료 확인됨. (총 {}건)", tradeAction, orderList.size());
                     return true;
                 }
 
-                log.info("[INFO] 매수 체결 대기 중... (시도 {}/{})", attempt, maxRetries);
+                log.info("[INFO] {} 체결 대기 중... (시도 {}/{})", tradeAction, attempt, maxRetries);
                 Thread.sleep(intervalMillis);
 
             } catch (Exception e) {
-                log.error("[ERROR] 매수 체결 확인 중 예외 발생", e);
-                return false;
+                log.error("[ERROR] {} 체결 확인 중 예외 발생", tradeAction, e);
+                try {
+                    Thread.sleep(intervalMillis);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             }
         }
-        log.error("[ERROR] 지정된 시간 내 매수 체결 확인 실패");
+
+        log.error("[ERROR] 지정된 시간 내 {} 체결 확인 실패 ({}건)", tradeAction, orderList.size());
         return false;
     }
 
@@ -637,6 +693,9 @@ public class AutoTradeService {
     }
 
     private double computeEstimateRestCashBalance(double cashBalance, List<OverseasStockDto> orders) throws Exception {
+        if (orders == null || orders.isEmpty()) {
+            return cashBalance;
+        }
         double totalOrderCost = orders.stream().mapToDouble(dto -> {
             try {
                 double price = Double.parseDouble(dto.getOvrsOrdUnpr());
@@ -647,7 +706,14 @@ public class AutoTradeService {
             }
         }).sum();
 
-        return cashBalance - totalOrderCost;
+        int orderType = orders.get(0).getOrderType();
+        if (orderType == 1) { // 1: 매도
+            return cashBalance + totalOrderCost;
+        } else if (orderType == 2) { // 2: 매수
+            return cashBalance - totalOrderCost;
+        }
+
+        return cashBalance;
     }
 
     /**

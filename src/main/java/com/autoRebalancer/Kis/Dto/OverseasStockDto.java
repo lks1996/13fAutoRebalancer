@@ -80,7 +80,7 @@ public class OverseasStockDto {
     // 해외주문단가
     String ovrsOrdUnpr;
     // 주문서버 구분코드
-    String ordSvrDvsnCd = "";
+    String ordSvrDvsnCd = "0";
     // 주문구분
     //[Header tr_id TTTT1002U(미국 매수 주문)]
     //00 : 지정가
