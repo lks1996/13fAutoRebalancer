@@ -39,6 +39,9 @@ public class FilingProcessService {
         // 2. [저장] Filing 리스트 DB 저장.
         List<FilingEntity> savedFilings = persistenceService.saveFilings(filingDtos);
 
+        // 3. [수정] 저장한 Filing 데이터 중 구글시트에 선택되어 있는 기관이 있다면 구글시트 Holdings 데이터 최신화.
+
+
         log.warn("[SUCCESS] Processing finished for processLatestFilings");
 
     }
