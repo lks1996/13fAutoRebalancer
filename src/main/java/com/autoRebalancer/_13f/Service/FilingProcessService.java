@@ -1,5 +1,7 @@
 package com.autoRebalancer._13f.Service;
 
+import com.autoRebalancer.Googlesheet.Service.AppsScriptExecutionService;
+import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
 import com.autoRebalancer._13f.Dto.Filing;
 import com.autoRebalancer._13f.Dto.Holding;
 import com.autoRebalancer._13f.Dto.PortfolioHolding;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -19,17 +22,25 @@ public class FilingProcessService {
     // final 키워드를 사용하여 불변성을 보장하고, 생성자 주입을 사용합니다.
     private final DataScrapService scrapService;
     private final FilingPersistenceService persistenceService;
+    private final SheetDataImportService sheetDataImportService;
+    private final AppsScriptExecutionService appsScriptExecutionService;
 
-    public FilingProcessService(DataScrapService scrapService, FilingPersistenceService persistenceService) {
+    public FilingProcessService(DataScrapService scrapService
+            , FilingPersistenceService persistenceService
+            , SheetDataImportService sheetDataImportService
+            , AppsScriptExecutionService appsScriptExecutionService
+    ) {
         this.scrapService = scrapService;
         this.persistenceService = persistenceService;
+        this.sheetDataImportService = sheetDataImportService;
+        this.appsScriptExecutionService = appsScriptExecutionService;
     }
 
     /**
      * 특정 기간에 대한 최신 13F Filing 데이터 조회.
      */
     @Transactional
-    public void processLatestFilings() throws IOException, InterruptedException {
+    public void processLatestFilings() throws Exception {
 
         log.warn("[START] Processing for processLatestFilings");
 
@@ -40,7 +51,34 @@ public class FilingProcessService {
         List<FilingEntity> savedFilings = persistenceService.saveFilings(filingDtos);
 
         // 3. [수정] 저장한 Filing 데이터 중 구글시트에 선택되어 있는 기관이 있다면 구글시트 Holdings 데이터 최신화.
+        try {
+            // 3-1. savedFilings가 비어있는지 확인
+            if (!savedFilings.isEmpty()) return;
 
+            // 3-2. 구글시트에서 현재 모니터링 중인 CIK 조회
+            String selectedCik = sheetDataImportService.getActiveMonitoredCik();
+            // ... (selectedCik 비어있는지 체크) ...
+
+            // 3-3. "새로 저장된 Filing 목록"에 "선택된 CIK"가 있는지 확인
+            Optional<FilingEntity> matchedFiling = savedFilings.stream()
+                    .filter(filing -> selectedCik.equals(filing.getCik()))
+                    .findFirst();
+
+            // 3-4. [핵심] 일치하는 항목 발견 시, Apps Script 함수 호출
+            if (matchedFiling.isPresent()) {
+                log.warn("[UPDATE] CIK {}의 새 Filing 발견. Apps Script 시트 갱신을 트리거합니다...", selectedCik);
+
+                // "refreshHoldings" 부분은 Apps Script에 실제 정의된 함수 이름으로 변경
+                appsScriptExecutionService.triggerSheetRefresh("refreshHoldings");
+
+                log.info("[UPDATE] Apps Script가 성공적으로 트리거되었습니다 (CIK: {})", selectedCik);
+            }
+            // ... (else 로직) ...
+
+        } catch (Exception e) {
+            log.error("[ERROR] 시트 갱신 확인 중 오류 발생. 트랜잭션 롤백.", e);
+            throw e;
+        }
 
         log.warn("[SUCCESS] Processing finished for processLatestFilings");
 

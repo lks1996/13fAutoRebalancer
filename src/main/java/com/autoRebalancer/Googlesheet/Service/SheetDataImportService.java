@@ -24,6 +24,8 @@ public class SheetDataImportService {
     private String SHEET_ID;
     @Value("${googleSheetsapi.spreadsheetrange}")
     private String SHEET_RANGE;
+    @Value("${googleSheetsapi.cikCellRange}")
+    private String CIK_CELL_RANGE;
 
     public Sheets getSheets() throws Exception {
 
@@ -56,4 +58,44 @@ public class SheetDataImportService {
         return response.getValues();
     }
 
+    public String getActiveMonitoredCik() throws Exception {
+        String spreadsheetId = SHEET_ID;
+        String range = CIK_CELL_RANGE; // 홀딩스 범위가 아닌 CIK 셀 범위 사용
+
+        try {
+            Sheets service = getSheets();
+            ValueRange response = service.spreadsheets().values()
+                    .get(spreadsheetId, range)
+                    .execute();
+
+            List<List<Object>> values = response.getValues();
+
+            // 값(CIK)이 단일 셀(예: Settings!B1)에서 성공적으로 조회된 경우:
+            // values는 [[ "0001067983" ]] 형태의 리스트가 됩니다.
+            if (values == null || values.isEmpty()) {
+                log.warn("[WARN] CIK_CELL_RANGE ({})에 값이 비어있습니다. CIK 갱신을 건너뜁니다.", range);
+                return null;
+            }
+
+            // 첫 번째 행(values.get(0))의 첫 번째 열(row.get(0)) 값을 가져옵니다.
+            List<Object> row = values.get(0);
+            if (row == null || row.isEmpty() || row.get(0) == null) {
+                log.warn("[WARN] CIK_CELL_RANGE ({})의 첫 번째 셀이 비어있습니다. CIK 갱신을 건너뜁니다.", range);
+                return null;
+            }
+
+            String cik = row.get(0).toString().trim();
+            if (cik.isEmpty()) {
+                log.warn("[WARN] CIK_CELL_RANGE ({})의 값이 공백입니다. CIK 갱신을 건너뜁니다.", range);
+                return null;
+            }
+
+            log.info("[INFO] 구글 시트에서 모니터링 중인 CIK를 확인했습니다: {}", cik);
+            return cik;
+
+        } catch (Exception e) {
+            log.error("[ERROR] 구글 시트에서 CIK 값을 가져오는 중 오류 발생. Range: {}", range, e);
+            throw e; // 오류 전파
+        }
+    }
 }
