@@ -52,14 +52,17 @@ public class FilingProcessService {
 
         // 3. [수정] 저장한 Filing 데이터 중 구글시트에 선택되어 있는 기관이 있다면 구글시트 Holdings 데이터 최신화.
         try {
-            // 3-1. savedFilings가 비어있는지 확인
-            if (!savedFilings.isEmpty()) return;
+            // 3-1. savedFilings가 비어있는지 확인.
+            if (savedFilings.isEmpty()) return;
 
-            // 3-2. 구글시트에서 현재 모니터링 중인 CIK 조회
+            // 3-2. 새로추가된 Filings가 있다면 구글시트의 기관 목록 최신화.
+            appsScriptExecutionService.triggerSheetRefresh("updateFilerList");
+
+            // 3-3. 구글시트에서 현재 모니터링 중인 CIK 조회.
             String selectedCik = sheetDataImportService.getActiveMonitoredCik();
-            // ... (selectedCik 비어있는지 체크) ...
+            if (selectedCik.isEmpty()) return;
 
-            // 3-3. "새로 저장된 Filing 목록"에 "선택된 CIK"가 있는지 확인
+            // 3-4. "새로 저장된 Filing 목록"에 "선택된 CIK"가 있는지 확인.
             Optional<FilingEntity> matchedFiling = savedFilings.stream()
                     .filter(filing -> selectedCik.equals(filing.getCik()))
                     .findFirst();
@@ -68,12 +71,10 @@ public class FilingProcessService {
             if (matchedFiling.isPresent()) {
                 log.warn("[UPDATE] CIK {}의 새 Filing 발견. Apps Script 시트 갱신을 트리거합니다...", selectedCik);
 
-                // "refreshHoldings" 부분은 Apps Script에 실제 정의된 함수 이름으로 변경
-                appsScriptExecutionService.triggerSheetRefresh("refreshHoldings");
+                appsScriptExecutionService.triggerSheetRefresh("processSelectedFiler");
 
                 log.info("[UPDATE] Apps Script가 성공적으로 트리거되었습니다 (CIK: {})", selectedCik);
             }
-            // ... (else 로직) ...
 
         } catch (Exception e) {
             log.error("[ERROR] 시트 갱신 확인 중 오류 발생. 트랜잭션 롤백.", e);

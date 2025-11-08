@@ -63,7 +63,7 @@ public class DataScrapController {
      * 최신 Filing 데이터 조회 및 저장.
      */
     @GetMapping("/executeProcessLatestFilings")
-    public void executeProcessLatestFilings() throws IOException, InterruptedException {
+    public void executeProcessLatestFilings() throws Exception {
         filingProcessService.processLatestFilings();
     }
 

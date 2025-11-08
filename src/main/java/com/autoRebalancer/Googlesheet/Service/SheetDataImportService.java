@@ -70,14 +70,11 @@ public class SheetDataImportService {
 
             List<List<Object>> values = response.getValues();
 
-            // 값(CIK)이 단일 셀(예: Settings!B1)에서 성공적으로 조회된 경우:
-            // values는 [[ "0001067983" ]] 형태의 리스트가 됩니다.
             if (values == null || values.isEmpty()) {
                 log.warn("[WARN] CIK_CELL_RANGE ({})에 값이 비어있습니다. CIK 갱신을 건너뜁니다.", range);
                 return null;
             }
 
-            // 첫 번째 행(values.get(0))의 첫 번째 열(row.get(0)) 값을 가져옵니다.
             List<Object> row = values.get(0);
             if (row == null || row.isEmpty() || row.get(0) == null) {
                 log.warn("[WARN] CIK_CELL_RANGE ({})의 첫 번째 셀이 비어있습니다. CIK 갱신을 건너뜁니다.", range);

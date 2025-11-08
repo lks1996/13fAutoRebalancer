@@ -2,7 +2,6 @@ package com.autoRebalancer.Googlesheet.Controller;
 
 import com.autoRebalancer.Common.ApiResponse;
 import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
-import com.autoRebalancer._13f.Dto.Holding;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,11 +23,20 @@ public class SheetDataImportController {
     }
 
     /**
-     * 국내주식 잔고 조회
+     * 구글시트의 포트폴리오 데이터 임포트.
      */
     @GetMapping("/dataImport")
     public ResponseEntity<ApiResponse<List<List<Object>>>> getDomesticStockBalance() throws Exception{
         List<List<Object>> result = sheetDataImportService.getSheetsData();
+        return new ResponseEntity<>(ApiResponse.success(result), HttpStatus.OK);
+    }
+
+    /**
+     * 구글시트의 특정 셀(cik) 조회.
+     */
+    @GetMapping("/activeMonitoredCik")
+    public ResponseEntity<ApiResponse<String>> getActiveMonitoredCik() throws Exception{
+        String result = sheetDataImportService.getActiveMonitoredCik();
         return new ResponseEntity<>(ApiResponse.success(result), HttpStatus.OK);
     }
 }

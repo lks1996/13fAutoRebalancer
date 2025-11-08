@@ -56,10 +56,10 @@ public class AppsScriptExecutionService {
     }
 
     /**
-     * 지정된 Apps Script 함수를 원격으로 실행.
+     * 지정된 Apps Script 함수 원격 실행.
      * @param functionName Apps Script에 정의된 함수 이름
      */
-    public void triggerSheetRefresh(String functionName) {
+    public void triggerSheetRefresh(String functionName) throws Exception {
         log.info("[AppsScript] 원격 함수 실행 시도: {}", functionName);
         try {
             Script service = getScriptService();
