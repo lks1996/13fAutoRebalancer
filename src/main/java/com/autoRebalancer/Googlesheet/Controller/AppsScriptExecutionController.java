@@ -22,6 +22,7 @@ public class AppsScriptExecutionController {
      */
     @GetMapping("/triggerSheetRefresh")
     public void triggerSheetRefresh(String functionName) throws Exception {
-        appsScriptExecutionService.triggerSheetRefresh(functionName);
+//        appsScriptExecutionService.triggerSheetRefresh(functionName);
+        appsScriptExecutionService.triggerSheetRefresh();
     }
 }
