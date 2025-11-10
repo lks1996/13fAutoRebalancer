@@ -1,6 +1,5 @@
 package com.autoRebalancer._13f.Service;
 
-import com.autoRebalancer.Googlesheet.Service.AppsScriptExecutionService;
 import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
 import com.autoRebalancer._13f.Dto.Filing;
 import com.autoRebalancer._13f.Dto.Holding;
@@ -23,17 +22,14 @@ public class FilingProcessService {
     private final DataScrapService scrapService;
     private final FilingPersistenceService persistenceService;
     private final SheetDataImportService sheetDataImportService;
-    private final AppsScriptExecutionService appsScriptExecutionService;
 
     public FilingProcessService(DataScrapService scrapService
             , FilingPersistenceService persistenceService
             , SheetDataImportService sheetDataImportService
-            , AppsScriptExecutionService appsScriptExecutionService
     ) {
         this.scrapService = scrapService;
         this.persistenceService = persistenceService;
         this.sheetDataImportService = sheetDataImportService;
-        this.appsScriptExecutionService = appsScriptExecutionService;
     }
 
     /**
@@ -56,7 +52,7 @@ public class FilingProcessService {
             if (savedFilings.isEmpty()) return;
 
             // 3-2. 새로추가된 Filings가 있다면 구글시트의 기관 목록 최신화.
-            appsScriptExecutionService.triggerSheetRefresh("updateFilerList");
+//            appsScriptExecutionService.triggerSheetRefresh("updateFilerList");
 
             // 3-3. 구글시트에서 현재 모니터링 중인 CIK 조회.
             String selectedCik = sheetDataImportService.getActiveMonitoredCik();
@@ -69,11 +65,11 @@ public class FilingProcessService {
 
             // 3-4. [핵심] 일치하는 항목 발견 시, Apps Script 함수 호출
             if (matchedFiling.isPresent()) {
-                log.warn("[UPDATE] CIK {}의 새 Filing 발견. Apps Script 시트 갱신을 트리거합니다...", selectedCik);
+                log.warn("[UPDATE] CIK {}의 새 Filing 발견. 시트 갱신...", selectedCik);
 
-                appsScriptExecutionService.triggerSheetRefresh("processSelectedFiler");
+                sheetDataImportService.updateHoldingsData(getOrFetchHoldingsByCik(selectedCik));
 
-                log.info("[UPDATE] Apps Script가 성공적으로 트리거되었습니다 (CIK: {})", selectedCik);
+                log.info("[UPDATE] 시트 갱신 성공 (CIK: {})", selectedCik);
             }
 
         } catch (Exception e) {

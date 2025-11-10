@@ -2,6 +2,7 @@ package com.autoRebalancer.Googlesheet.Controller;
 
 import com.autoRebalancer.Common.ApiResponse;
 import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
+import com.autoRebalancer._13f.Service.FilingProcessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +17,13 @@ import java.util.List;
 public class SheetDataImportController {
 
     private final SheetDataImportService sheetDataImportService;
+    private final FilingProcessService filingProcessService;
 
     @Autowired
-    public SheetDataImportController(SheetDataImportService sheetDataImportService) {
+    public SheetDataImportController(SheetDataImportService sheetDataImportService
+            , FilingProcessService filingProcessService) {
         this.sheetDataImportService = sheetDataImportService;
+        this.filingProcessService = filingProcessService;
     }
 
     /**
@@ -38,5 +42,13 @@ public class SheetDataImportController {
     public ResponseEntity<ApiResponse<String>> getActiveMonitoredCik() throws Exception{
         String result = sheetDataImportService.getActiveMonitoredCik();
         return new ResponseEntity<>(ApiResponse.success(result), HttpStatus.OK);
+    }
+
+    /**
+     * 선택한 기관의 CIK 값을 기준으로 가징 최신의 13f 데이터로 구글시트 최신화.
+     */
+    @GetMapping("/sheetRefresh")
+    public void triggerSheetRefresh(String selectedCik) throws Exception {
+        sheetDataImportService.updateHoldingsData(filingProcessService.getOrFetchHoldingsByCik(selectedCik));
     }
 }
