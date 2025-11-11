@@ -1,7 +1,9 @@
 package com.autoRebalancer.Common.Mapper;
 
 import com.autoRebalancer._13f.Dto.Filing;
+import com.autoRebalancer._13f.Dto.Holding;
 import com.autoRebalancer._13f.Entity.FilingEntity;
+import com.autoRebalancer._13f.Entity.HoldingEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -25,6 +27,8 @@ public interface FilingMapper {
     @Mapping(target = "confDateDeniedExpired", source = "confDateDeniedExpired", dateFormat = "yyyy-MM-dd")
     @Mapping(target = "amendmentDateReported", source = "amendmentDateReported", dateFormat = "yyyy-MM-dd")
     Filing toDto(FilingEntity filingEntity);
+
+    List<Filing> toDtoList(List<FilingEntity> FilingEntity);
 
     default String map(LocalDate date) {
         if (date == null) {

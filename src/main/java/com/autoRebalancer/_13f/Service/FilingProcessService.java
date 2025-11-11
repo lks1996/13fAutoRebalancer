@@ -1,5 +1,6 @@
 package com.autoRebalancer._13f.Service;
 
+import com.autoRebalancer.Common.Mapper.FilingMapper;
 import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
 import com.autoRebalancer._13f.Dto.Filing;
 import com.autoRebalancer._13f.Dto.Holding;
@@ -52,7 +53,7 @@ public class FilingProcessService {
             if (savedFilings.isEmpty()) return;
 
             // 3-2. 새로추가된 Filings가 있다면 구글시트의 기관 목록 최신화.
-//            appsScriptExecutionService.triggerSheetRefresh("updateFilerList");
+            sheetDataImportService.updateFilerList(persistenceService.findAllFilers());
 
             // 3-3. 구글시트에서 현재 모니터링 중인 CIK 조회.
             String selectedCik = sheetDataImportService.getActiveMonitoredCik();
