@@ -1,6 +1,7 @@
 package com.autoRebalancer._13f.Controller;
 
 import com.autoRebalancer.Common.ApiResponse;
+import com.autoRebalancer.Googlesheet.Service.SheetDataImportService;
 import com.autoRebalancer._13f.Dto.Filer;
 import com.autoRebalancer._13f.Dto.PortfolioHolding;
 import com.autoRebalancer._13f.Service.FilingPersistenceService;
@@ -20,10 +21,14 @@ public class ApiController {
 
     private final FilingPersistenceService persistenceService;
     private final FilingProcessService filingProcessService;
+    private final SheetDataImportService sheetDataImportService;
 
-    public ApiController(FilingPersistenceService persistenceService, FilingProcessService filingProcessService) {
+    public ApiController(FilingPersistenceService persistenceService
+            , FilingProcessService filingProcessService
+            , SheetDataImportService sheetDataImportService) {
         this.persistenceService = persistenceService;
         this.filingProcessService = filingProcessService;
+        this.sheetDataImportService = sheetDataImportService;
     }
 
     /**
@@ -43,5 +48,21 @@ public class ApiController {
     public ResponseEntity<ApiResponse<List<PortfolioHolding>>> executeProcessHoldingsByCik(String cik) throws IOException, InterruptedException {
         List<PortfolioHolding> result = filingProcessService.getOrFetchHoldingsByCik(cik);
         return new ResponseEntity<>(ApiResponse.success(result), HttpStatus.OK);
+    }
+
+    /**
+     * 선택한 기관의 CIK 값을 기준으로 가징 최신의 13f 데이터로 구글시트 최신화.
+     */
+    @GetMapping("/sheetRefresh")
+    public void triggerSheetRefresh(String selectedCik) throws Exception {
+        sheetDataImportService.updateFilerList(persistenceService.findAllFilers());
+    }
+
+    /**
+     * 선택한 기관의 CIK 값을 기준으로 가징 최신의 13f 데이터로 구글시트 최신화.
+     */
+    @GetMapping("/holdingsRefresh")
+    public void triggerHoldingsRefresh(String selectedCik) throws Exception {
+        sheetDataImportService.updateHoldingsData(filingProcessService.getOrFetchHoldingsByCik(selectedCik));
     }
 }

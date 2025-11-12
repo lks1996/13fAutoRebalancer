@@ -1,9 +1,7 @@
 package com.autoRebalancer.Common.Mapper;
 
 import com.autoRebalancer._13f.Dto.Filing;
-import com.autoRebalancer._13f.Dto.Holding;
 import com.autoRebalancer._13f.Entity.FilingEntity;
-import com.autoRebalancer._13f.Entity.HoldingEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

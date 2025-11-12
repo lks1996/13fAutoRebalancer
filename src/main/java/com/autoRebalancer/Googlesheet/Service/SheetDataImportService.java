@@ -1,7 +1,6 @@
 package com.autoRebalancer.Googlesheet.Service;
 
 import com.autoRebalancer._13f.Dto.Filer;
-import com.autoRebalancer._13f.Dto.Filing;
 import com.autoRebalancer._13f.Dto.PortfolioHolding;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.javanet.NetHttpTransport;

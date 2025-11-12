@@ -1,6 +1,5 @@
 package com.autoRebalancer.Googlesheet.DTO;
 
-import com.google.gson.annotations.SerializedName;
 import lombok.Data;
 
 @Data
