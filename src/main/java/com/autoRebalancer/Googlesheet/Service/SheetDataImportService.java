@@ -217,7 +217,7 @@ public class SheetDataImportService {
                         h.nameOfIssuer(),
                         h.totalShares(),
                         h.totalValue(),
-                        (Object) (h.totalPercentage())
+                        (Object) (h.totalPercentage() == 0.0 ? "-" : String.format("%.2f%%", h.totalPercentage()))
                 ))
                 .collect(Collectors.toList());
 
