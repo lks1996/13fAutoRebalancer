@@ -55,7 +55,7 @@ public class AutoTradeService {
 
         /// FOR TEST ///
         if(vprofile.equals("dev")){
-            cashBalance = 1000.0;
+            cashBalance = 10000.0;
             log.warn("[WARN]테스트 예수금 총액: {}", cashBalance);
         }
         /// FOR TEST ///
