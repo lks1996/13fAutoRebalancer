@@ -30,7 +30,7 @@ public interface HoldingRepository extends JpaRepository<HoldingEntity, Long> {
             "   SUM(h.portfolioPercentage)) " +
             "FROM HoldingEntity h " +
             "WHERE h.filing.accessionNumber = :accessionNumber " +
-            "AND h.titleOfClass = 'COM' " +
+            "AND (h.titleOfClass = 'COM' OR h.titleOfClass = 'CAP STK CL A')" +
             "GROUP BY h.ticker, h.nameOfIssuer " +
             "HAVING SUM(h.portfolioPercentage) >= 0.1 " + // 비중 0.1% 이상 필터링
             "ORDER BY SUM(h.value) DESC")
