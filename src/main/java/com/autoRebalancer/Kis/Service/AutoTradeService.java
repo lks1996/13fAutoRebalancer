@@ -95,7 +95,7 @@ public class AutoTradeService {
         if (!toSellList.isEmpty()) {
             log.warn("[WARN] 총 {}개의 종목에 대한 매도 주문 시작...", toSellList.size());
             // 3-2. 매도 주문 실행 (orderType=1 (매도))
-            orderStocks(toSellList);
+            List<OverseasStockDto> successfulSellList = orderStocks(toSellList);
 
             // 3-3. 매도 완료 후 잔고 및 현금 재조회
             log.info("[INFO] 매도 체결 확인 완료. 잔고 및 현금 재조회...");
@@ -109,13 +109,13 @@ public class AutoTradeService {
                 cashBalance = Parser.safeParseDouble(getCurrentCashBalance().getFrcrOrdPsblAmt1());
                 log.warn("[WARN] 매도 완료 후 실제 예수금: {}", cashBalance);
             } else {
-                cashBalance = computeEstimateRestCashBalance(cashBalance, toSellList);
+                cashBalance = computeEstimateRestCashBalance(cashBalance, successfulSellList);
                 log.warn("[WARN] 매도 완료 후 테스트 예수금: {}", cashBalance);
             }
 
             // 3-4. 매도 체결 대기
             // 중요: 'holdingStocks'는 매도 주문 '전'의 상태.
-            boolean sellCompleted = waitForTradeCompletion(toSellList, holdingStocks, 5, 5000);
+            boolean sellCompleted = waitForTradeCompletion(successfulSellList, holdingStocks, 5, 5000);
 
             if (!sellCompleted) {
                 log.warn("[WARN] 매도 후 예상 예수금 총액: {}", cashBalance);
@@ -148,15 +148,15 @@ public class AutoTradeService {
             if (!toBuyList.isEmpty()) {
 
                 // 4-3. 추가 매수가 필요한 종목 주문.
-                orderStocks(toBuyList);
+                List<OverseasStockDto> successfulBuyList = orderStocks(toBuyList);
 
                 // 4-4. 잔존 예상 예수금 계산.
-                cashBalance = computeEstimateRestCashBalance(cashBalance, toBuyList);
+                cashBalance = computeEstimateRestCashBalance(cashBalance, successfulBuyList);
                 log.warn("[WARN]미보유 종목 매수 후 예상 예수금 총액: {}", cashBalance);
 
                 // 4-5. 미보유 종목이 매수되었는지 확인.
                 // 중요: 'holdingStocks'는 매도 '후' & 미보유 매수 '전'의 상태.
-                boolean buyCompleted = waitForTradeCompletion(toBuyList, holdingStocks, 5, 5000);
+                boolean buyCompleted = waitForTradeCompletion(successfulBuyList, holdingStocks, 5, 5000);
 
                 if ( !buyCompleted ) {
                     log.warn("[WARN]미보유 종목 매수 미체결 상태로 리밸런싱 시작.");
@@ -183,9 +183,9 @@ public class AutoTradeService {
 
         if (!rebalanceBuyList.isEmpty()) {
             // 5-3. 추가 매수가 필요한 종목 주문.
-            orderStocks(rebalanceBuyList);
+            List<OverseasStockDto> successfulRebalanceList = orderStocks(rebalanceBuyList);
             // 5-4. 잔존 예상 예수금 계산.
-            cashBalance = computeEstimateRestCashBalance(cashBalance, rebalanceBuyList);
+            cashBalance = computeEstimateRestCashBalance(cashBalance, successfulRebalanceList);
         }
 
         log.warn("[WARN]리밸런싱 종목 매수 후 예상 예수금 총액: {}", cashBalance);
@@ -383,7 +383,7 @@ public class AutoTradeService {
                     : 0.0;
             res.put("buyRatio", buyRatio);
 
-            log.info("미보유 종목 {}({}): 구매금액 {}원, 실제 구매비율 {}%",
+            log.info("미보유 종목 {}({}): 구매금액 ${}, 실제 구매비율 {}%",
                     res.get("name"),
                     res.get("code"),
                     res.get("needToBuyAmount"),
@@ -405,9 +405,12 @@ public class AutoTradeService {
     public boolean waitForTradeCompletion(List<OverseasStockDto> orderList, List<OverseasStockDto> originalHoldingStocks, int maxRetries, long intervalMillis) {
 
         if (orderList == null || orderList.isEmpty()) {
-            log.info("[INFO] 체결 확인할 주문 내역이 없습니다.");
+            log.warn("[INFO] 체결 확인할 주문 내역이 없습니다.");
             return true;
         }
+
+        // 1. 추적을 위해 수정 가능한 리스트(Pending List)로 복사
+        List<OverseasStockDto> pendingOrders = new ArrayList<>(orderList);
 
         // 주문 타입 확인 (1:매도, 2:매수)
         int orderType = orderList.get(0).getOrderType();
@@ -421,11 +424,11 @@ public class AutoTradeService {
                         (existing, replacement) -> existing // 혹시 모를 중복 티커 처리
                 ));
 
-        log.info("[INFO] {} 체결 대기 시작... (대상 {}건)", tradeAction, orderList.size());
+        log.warn("[INFO] {} 체결 대기 시작... (대상 {}건)", tradeAction, orderList.size());
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // 1. 현재 잔고 조회
+                // 2. 현재 잔고 조회.
                 OverseasStockBalanceResponseDto sbrDto = getCurrentBalance();
                 if (!StockBalanceResponseCheck(sbrDto)) {
                     log.error("[ERROR] {} 체결 확인 중 잔고 조회 실패 (output null). (시도 {}/{})", tradeAction, attempt, maxRetries);
@@ -433,7 +436,7 @@ public class AutoTradeService {
                     continue;
                 }
 
-                // 2. 현재 보유 수량을 맵으로 변환 (ordPsblQty: 주문 가능 수량 기준)
+                // 3. 현재 보유 수량을 맵으로 변환. (ordPsblQty: 주문 가능 수량 기준)
                 Map<String, Long> currentQtyMap = sbrDto.getOutput1().stream()
                         .collect(Collectors.toMap(
                                 OverseasBalanceOutput1Dto::getOvrsPdno,
@@ -441,36 +444,47 @@ public class AutoTradeService {
                                 (existing, replacement) -> existing
                         ));
 
-                // 3. 모든 주문이 체결되었는지 확인
-                boolean isAllCompleted = orderList.stream().allMatch(order -> {
+                // 4. 모든 주문이 체결되었는지 확인.
+                Iterator<OverseasStockDto> iterator = pendingOrders.iterator();
+                while (iterator.hasNext()) {
+                    OverseasStockDto order = iterator.next();
                     String symbol = order.getSymb();
-                    long orderQty = Parser.safeParseLong(order.getOrdQty()); // 주문한 수량
-                    long originalQty = originalQtyMap.getOrDefault(symbol, 0L); // 주문 전 보유 수량
-                    long currentQty = currentQtyMap.getOrDefault(symbol, 0L);   // 현재 보유 수량
+                    long orderQty = Parser.safeParseLong(order.getOrdQty());
+                    long originalQty = originalQtyMap.getOrDefault(symbol, 0L);
+                    long currentQty = currentQtyMap.getOrDefault(symbol, 0L);
+
+                    boolean isCompleted = false;
 
                     if (orderType == 1) { // [매도 확인]
                         long expectedQtyAfterSell = originalQty - orderQty;
-                        if (expectedQtyAfterSell < 0) expectedQtyAfterSell = 0; // (예: 보유량 5주인데 10주 매도 주문 -> 0주가 되어야 함)
-
-                        // 현재 수량이 (원래 수량 - 매도 수량)과 정확히 같아야 함
-                        return currentQty == expectedQtyAfterSell;
-
+                        if (expectedQtyAfterSell < 0) expectedQtyAfterSell = 0;
+                        // 매도는 정확히 수량이 줄어들어야 함
+                        if (currentQty == expectedQtyAfterSell) {
+                            isCompleted = true;
+                        }
                     } else { // [매수 확인] (orderType == 2)
                         long expectedQtyAfterBuy = originalQty + orderQty;
-
-                        // 현재 수량이 (원래 수량 + 매수 수량)보다 크거나 같아야 함
-                        return currentQty >= expectedQtyAfterBuy;
+                        // 매수는 수량이 늘어나야 함 (>= 사용)
+                        if (currentQty >= expectedQtyAfterBuy) {
+                            isCompleted = true;
+                        }
                     }
-                });
 
-                // 4. 결과 반환
-                if (isAllCompleted) {
-                    log.warn("[INFO] 모든 {} 체결 완료 확인됨. (총 {}건)", tradeAction, orderList.size());
-                    return true;
+                    // 체결 완료 확인.
+                    if (isCompleted) {
+                        log.info("[CHECK] {} 체결 확인 완료: {} ({}주)", tradeAction, order.getSymbName(), orderQty);
+                        iterator.remove(); // pendingOrders 리스트에서 제거
+                    }
+
+                    // 5. 모든 주문이 처리되었는지 확인.
+                    if (pendingOrders.isEmpty()) {
+                        log.warn("[INFO] 모든 {} 주문 체결 완료 확인됨. (총 {}건)", tradeAction, orderList.size());
+                        return true;
+                    }
+
+                    log.info("[INFO] {} 체결 대기 중... (남은 주문: {}건 / 시도 {}/{})", tradeAction, pendingOrders.size(), attempt, maxRetries);
+                    Thread.sleep(intervalMillis);
                 }
-
-                log.info("[INFO] {} 체결 대기 중... (시도 {}/{})", tradeAction, attempt, maxRetries);
-                Thread.sleep(intervalMillis);
 
             } catch (Exception e) {
                 log.error("[ERROR] {} 체결 확인 중 예외 발생", tradeAction, e);
@@ -483,7 +497,14 @@ public class AutoTradeService {
             }
         }
 
-        log.error("[ERROR] 지정된 시간 내 {} 체결 확인 실패 ({}건)", tradeAction, orderList.size());
+        // 6. 최대 횟수 초과 시 실패한 종목들 출력
+        String failedStocks = pendingOrders.stream()
+                .map(o -> o.getSymbName() + "(" + o.getSymb() + ")")
+                .collect(Collectors.joining(", "));
+
+        log.error("[ERROR] 지정된 시간 내 {} 체결 확인 실패. 미체결 {}건: [{}]",
+                tradeAction, pendingOrders.size(), failedStocks);
+
         return false;
     }
 
@@ -674,24 +695,50 @@ public class AutoTradeService {
      * 매수/매도 주문 실행
      * OverseasStockDto의 orderType (1:매도, 2:매수)에 따라 주문 서비스 호출.
      */
-    private void orderStocks(List<OverseasStockDto> orders) throws Exception {
+    private List<OverseasStockDto> orderStocks(List<OverseasStockDto> orders) throws Exception {
+        List<OverseasStockDto> successfulOrders = new ArrayList<>(); // 성공한 주문을 담을 리스트
+        ObjectMapper mapper = new ObjectMapper();
+
         for (OverseasStockDto order : orders) {
             String orderAction = (order.getOrderType() == 1) ? "매도" : "매수";
 
-            if (Validator.isValidOverseasOrder(order)) {
-                try {
-                    overseasStockService.orderOverseasStock(order);
-                    log.info("[INFO] {} 주문 전송: {}", orderAction, order);
+            // 1. 유효성 검사.
+            if (!Validator.isValidOverseasOrder(order)) {
+                log.warn("[WARN] 유효하지 않은 {} 주문(SKIP): Symbol={}, Qty={}", orderAction, order.getSymb(), order.getOrdQty());
+                continue;
+            }
 
-                } catch (Exception e) {
-                    log.error("[ERROR] {} 주문 실패 {}: {}", orderAction, order.getSymb(), e.getMessage());
+            try {
+                log.warn("[INFO] {} 주문 전송 시도: {} ({}주, 가격: {})", orderAction, order.getSymbName(), order.getOrdQty(), order.getOvrsOrdUnpr());
+
+                // 2. API 호출.
+                String jsonResponse = overseasStockService.orderOverseasStock(order);
+
+                // 3. 응답 파싱.
+                OrderResponseDto responseDto = mapper.readValue(jsonResponse, OrderResponseDto.class);
+
+                // 4. 결과 확인. (rt_cd: 0 성공, 그 외 실패)
+                if ("0".equals(responseDto.getRtCd())) {
+                    log.warn("[SUCCESS] {} 주문 접수 성공: {}", orderAction, order.getSymbName());
+                    successfulOrders.add(order); // 성공 리스트에 추가
+
+                } else {
+                    // 실패 시
+                    log.error("[FAIL] {} 주문 접수 실패: {} - 사유: {} (Code: {})",
+                            orderAction, order.getSymbName(), responseDto.getMsg1(), responseDto.getRtCd());
                 }
-            } else {
-                log.warn("[WARN] 유효하지 않은 {} 주문(SKIP): {}", orderAction, order);
+
+            } catch (Exception e) {
+                log.error("[ERROR] {} 주문 처리 중 시스템 예외 발생 {}: {}", orderAction, order.getSymb(), e.getMessage());
             }
         }
+        // 5. 성공한 주문 목록만 반환.
+        return successfulOrders;
     }
 
+    /**
+     * 주문 체결 후 예상 예수금 계산.
+     */
     private double computeEstimateRestCashBalance(double cashBalance, List<OverseasStockDto> orders) throws Exception {
         if (orders == null || orders.isEmpty()) {
             return cashBalance;

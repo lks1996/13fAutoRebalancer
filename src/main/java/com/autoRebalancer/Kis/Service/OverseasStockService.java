@@ -254,7 +254,7 @@ public class OverseasStockService {
      * 해외주식주문
      */
     @RequireValidToken
-    public void orderOverseasStock(OverseasStockDto orderStock) throws JsonProcessingException {
+    public String orderOverseasStock(OverseasStockDto orderStock) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         ObjectMapper objectMapper = new ObjectMapper();
         HttpHeaders headers = getHttpHeaders();
@@ -319,6 +319,8 @@ public class OverseasStockService {
 
         log.info(" response.getBody(): {}",  response.getBody());
         log.info("[OverSeasService.orderOverseasStock succeed.]");
+
+        return response.getBody();
     }
 
     /**
