@@ -31,7 +31,7 @@ jobs:
         run: |
           docker run -d --restart always `
           -p 8090:8090 `
-          -v "C:\13f-auto-rebalancer\config:/config" `
-          -v "C:\gcp-keys\googleSheetsApiServiceKey.json:/googleSheetsApiServiceKey.json:ro" `
+          -v "C:\Projects\13f-auto-rebalancer\config:/config" `
+          -v "C:\Keys\gcp-keys\googleSheetsApiServiceKey.json:/googleSheetsApiServiceKey.json:ro" `
           --name 13f-auto-rebalancer-container `
           13f-auto-rebalancer --spring.config.location=file:/config/application.yml
