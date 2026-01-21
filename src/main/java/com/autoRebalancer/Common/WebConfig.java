@@ -25,9 +25,6 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**");
     }
 
-    // ▼▼▼ yml에서 base-url 값을 주입받습니다 ▼▼▼
-
-
     @Bean
     public WebClient webClient() {
         return WebClient.builder()

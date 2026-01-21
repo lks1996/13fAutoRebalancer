@@ -22,7 +22,7 @@ import java.util.List;
 @Slf4j
 public class DataScrapService {
 
-    private static final String API_BASE_URL = "https://forms13f.com/api/v1";
+    private static final String API_BASE_URL = "http://forms13f.com/api/v1";
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Gson gson = new Gson();
 
