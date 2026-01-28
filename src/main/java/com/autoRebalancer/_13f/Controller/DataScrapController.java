@@ -2,6 +2,7 @@ package com.autoRebalancer._13f.Controller;
 
 import com.autoRebalancer.Common.ApiResponse;
 import com.autoRebalancer._13f.Dto.Filer;
+import com.autoRebalancer._13f.Dto.Filing;
 import com.autoRebalancer._13f.Dto.Holding;
 import com.autoRebalancer._13f.Dto.PortfolioHolding;
 import com.autoRebalancer._13f.Service.DataScrapService;
@@ -35,16 +36,16 @@ public class DataScrapController {
     /**
      * 13f 공시 데이터 기관 목록 조회
      */
-    @GetMapping("/getFilings")
-    public void getFilings() throws IOException, InterruptedException {
-        dataScrapService.getFilings();
+    @GetMapping("/filings")
+    public List<Filing> getFilings() throws IOException, InterruptedException {
+        return dataScrapService.getFilings();
     }
 
     /**
      * 13f 공시 데이터 기관 보유 자산 업데이트 조회
      * /api/v1/filings
      */
-    @GetMapping("/getLatestFiling")
+    @GetMapping("/latestFiling")
     public void getLatestFiling(String cik) {
         persistenceService.getLatestFilingByCik(cik);
     }
@@ -53,7 +54,7 @@ public class DataScrapController {
      * 13f 공시 데이터 특정 기관의 보유 자산 조회
      * /api/v1/form
      */
-    @GetMapping("/getHoldings")
+    @GetMapping("/holdings")
     public ResponseEntity<ApiResponse<List<Holding>>> getHoldings(String cik, String accessionNumber) throws IOException, InterruptedException {
         List<Holding> result = dataScrapService.getHoldings(cik, accessionNumber);
         return new ResponseEntity<>(ApiResponse.success(result), HttpStatus.OK);

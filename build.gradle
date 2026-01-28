@@ -62,6 +62,9 @@ dependencies {
 	// WebClient
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
+	// jackson
+	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+
 	// Testing
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
