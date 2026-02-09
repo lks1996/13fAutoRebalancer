@@ -358,7 +358,7 @@ public class OverseasStockService {
         log.info(" 주문체결조회 기간: {} - {}",  stockDto.getOrdStrtDt(),  stockDto.getOrdEndDt());
         log.info("==========================================");
 
-        log.debug("Headers: {}", headers);
+        log.info("Headers: {}", headers);
 
         HttpEntity<?> entity = new HttpEntity<>(headers);
 
