@@ -53,8 +53,8 @@ VOLUME /config
 ENTRYPOINT ["sh", "-c", "\
   if [ \"$APP_RUN_MODE\" = \"lambda\" ]; then \
     echo '===== Starting AWS Lambda RIC (Event Listener Mode) ====='; \
-    exec java -cp /app/unpacked/BOOT-INF/classes:/app/unpacked/BOOT-INF/lib/*:/app/unpacked/META-INF com.amazonaws.services.lambda.runtime.api.client.AWSLambda com.autoRebalancer.Lambda.ScheduledJobHandler; \
-  else \
+    exec java -cp /app/unpacked/BOOT-INF/classes:/app/unpacked/BOOT-INF/lib/*:/app/unpacked/META-INF com.amazonaws.services.lambda.runtime.api.client.AWSLambda com.autoRebalancer.Common.ScheduledJobHandler; \
+   else \
     echo '===== Starting Spring Boot Application (Windows Web Mode) ====='; \
     exec java -jar /app/app.jar --spring.profiles.active=${APP_RUN_MODE} --spring.config.additional-location=file:/config/; \
   fi \
