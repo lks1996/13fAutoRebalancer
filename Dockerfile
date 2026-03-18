@@ -29,7 +29,7 @@ RUN ./gradlew bootJar
 FROM eclipse-temurin:17-jre-jammy
 
 # 타임존 설정 (한국시간)
-RUN apt-get update && apt-get install -y tzdata \
+RUN apt-get update && apt-get install -y tzdata unzip \
     && ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime \
     && echo "Asia/Seoul" > /etc/timezone \
     && apt-get clean
