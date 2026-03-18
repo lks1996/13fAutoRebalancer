@@ -50,12 +50,13 @@ ENV APP_RUN_MODE=${RUN_MODE}
 VOLUME /config
 
 # 쉘 스크립트를 사용하여 환경변수에 따라 실행 명령어를 동적으로 변경.
+# (상단 생략)
 ENTRYPOINT ["sh", "-c", "\
   if [ \"$APP_RUN_MODE\" = \"lambda\" ]; then \
     echo '===== Starting AWS Lambda RIC (Event Listener Mode) ====='; \
     exec java -cp /app/unpacked/BOOT-INF/classes:/app/unpacked/BOOT-INF/lib/*:/app/unpacked/META-INF com.amazonaws.services.lambda.runtime.api.client.AWSLambda com.autoRebalancer.Common.ScheduledJobHandler; \
-   else \
+  else \
     echo '===== Starting Spring Boot Application (Windows Web Mode) ====='; \
-    exec java -jar /app/app.jar --spring.profiles.active=${APP_RUN_MODE} --spring.config.additional-location=file:/config/; \
+    exec java -jar /app/app.jar --spring.profiles.active=${APP_RUN_MODE} --spring.config.import=optional:file:/config/application-windows.yml; \
   fi \
 "]
