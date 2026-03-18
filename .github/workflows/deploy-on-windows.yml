@@ -16,7 +16,7 @@ jobs:
 
       # 2. Docker 이미지 빌드
       - name: 2. Build Docker Image
-        run: docker build -t 13f-auto-rebalancer .
+        run: docker build --build-arg RUN_MODE=windows -t 13f-auto-rebalancer .
 
       # 3. 기존 컨테이너 중지 및 제거
       - name: 3. Stop and Remove Existing Container
@@ -34,4 +34,4 @@ jobs:
           -v "C:\Projects\13f-auto-rebalancer\config:/config" `
           -v "C:\Keys\gcp-keys\googleSheetsApiServiceKey.json:/googleSheetsApiServiceKey.json:ro" `
           --name 13f-auto-rebalancer-container `
-          13f-auto-rebalancer --spring.config.location=file:/config/application.yml
+          13f-auto-rebalancer --spring.profiles.active=windows --spring.config.additional-location=file:/config/

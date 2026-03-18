@@ -37,5 +37,6 @@ out/
 .vscode/
 
 /src/main/generated/
-application.yml
 googleSheetsApiServiceKey.json
+application-windows.yml
+application-local.yml

@@ -13,7 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -23,8 +26,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SheetDataImportService {
 
-    @Value("${googleSheetsapi.credentialsFilePath:}")
+    @Value("${googleSheetsapi.credentialsFilePath:#{null}}")
     private String CREDENTIALS_FILE_PATH;
+    @Value("${googleSheetsapi.credentials-json:#{null}}")
+    private String CREDENTIALS_JSON;
     @Value("${googleSheetsapi.spreadsheetId}")
     private String SHEET_ID;
     @Value("${googleSheetsapi.filerSheetName:FilerData}")
@@ -45,7 +50,13 @@ public class SheetDataImportService {
 
         GoogleCredentials credentials;
 
-        if (CREDENTIALS_FILE_PATH != null && !CREDENTIALS_FILE_PATH.isBlank()) {
+        // AWS 람다 환경 (JSON 문자열이 환경변수로 주입된 경우)
+        if (CREDENTIALS_JSON != null && !CREDENTIALS_JSON.isBlank()) {
+            InputStream stream = new ByteArrayInputStream(CREDENTIALS_JSON.getBytes(StandardCharsets.UTF_8));
+            credentials = GoogleCredentials.fromStream(stream);
+        }
+        // 윈도우 환경 (볼륨 마운트된 파일 경로가 있는 경우)
+        else if (CREDENTIALS_FILE_PATH != null && !CREDENTIALS_FILE_PATH.isBlank()) {
             credentials = GoogleCredentials.fromStream(new FileInputStream(CREDENTIALS_FILE_PATH));
         } else {
             credentials = GoogleCredentials.getApplicationDefault();

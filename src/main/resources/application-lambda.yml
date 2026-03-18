@@ -1,0 +1,57 @@
+spring:
+    main:
+        web-application-type: none
+    datasource:
+        url: ${DB_URL}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        driver-class-name: oracle.jdbc.driver.OracleDriver
+
+server:
+    port: 8090
+
+vprofiles: ${VPROFILES:dev}
+
+slack:
+    webhookurl: ${SLACK_WEBHOOK_URL}
+
+personal-api:
+    secret-key: ${PERSONAL_API_SECRET}
+
+hantuOpenApi:
+    dev:
+        appkey: ${HANTU_DEV_APPKEY}
+        appsecret: ${HANTU_DEV_APPSECRET}
+        domain: https://openapivts.koreainvestment.com:29443
+        cano: ${HANTU_DEV_CANO}
+        acntprdtcd: "01"
+    prod:
+        appkey: ${HANTU_PROD_APPKEY}
+        appsecret: ${HANTU_PROD_APPSECRET}
+        domain: https://openapi.koreainvestment.com:9443
+        cano: ${HANTU_PROD_CANO}
+        acntprdtcd: "01"
+
+google:
+    projectid: lks-00
+
+googleSheetsapi:
+    credentials-json: ${GOOGLE_SHEETS_JSON:#{null}}
+    spreadsheetId: ${GOOGLE_SPREADSHEET_ID}
+    filerSheetName: FilerData
+    filersheetrange: FilerData!A:B
+    dashboardSheetName: 13F-Data-${vprofiles}
+    dashboardsheetrange: 13F-Data-${vprofiles}!E3:I300
+    cikCellRange: 13F-Data-${vprofiles}!B3
+
+hantuOpenapi:
+    appkey: ${hantuOpenApi.${vprofiles}.appkey}
+    appsecret: ${hantuOpenApi.${vprofiles}.appsecret}
+    domain: ${hantuOpenApi.${vprofiles}.domain}
+    cano: ${hantuOpenApi.${vprofiles}.cano}
+    acntprdtcd: ${hantuOpenApi.${vprofiles}.acntprdtcd}
+
+kis:
+    master:
+        api:
+            base-url: ${KIS_MASTER_BASE_URL}

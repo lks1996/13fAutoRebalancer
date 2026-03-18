@@ -2,11 +2,13 @@ package com.autoRebalancer.Scheduler;
 
 import com.autoRebalancer._13f.Service.FilingProcessService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
+@Profile("windows-batch")
 public class FilingDataScheduler {
 
     private final FilingProcessService filingProcessService;

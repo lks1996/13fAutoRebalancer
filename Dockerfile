@@ -40,8 +40,15 @@ WORKDIR /app
 # 빌더 환경에서 만들어진 JAR 파일을 최종 환경으로 복사
 COPY --from=builder /workspace/app/build/libs/*.jar app.jar
 
+# 빌드 시점에 어떤 모드로 구동할지 정하는 인자
+ARG RUN_MODE=windows
+ENV APP_RUN_MODE=${RUN_MODE}
+
 # 컨테이너 내부에 /config 라는 빈 디렉토리 셍성. (application.yml 파일용)
 VOLUME /config
 
+# ENTRYPOINT 수정: 환경변수를 통해 프로파일을 동적으로 주입
+ENTRYPOINT ["sh", "-c", "java -jar /app/app.jar --spring.profiles.active=${APP_RUN_MODE}"]
+
 # 컨테이너가 시작될 때 이 명령어를 실행
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+#ENTRYPOINT ["java","-jar","/app/app.jar"]
