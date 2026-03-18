@@ -31,7 +31,8 @@ jobs:
         run: |
           docker run -d --restart always `
           -p 8090:8090 `
-          -v "C:\Projects\13f-auto-rebalancer\config:/config" `
+          -e SPRING_PROFILES_ACTIVE=windows `
+          -v "C:\Projects\13f-auto-rebalancer\config:/app/config" `
           -v "C:\Keys\gcp-keys\googleSheetsApiServiceKey.json:/googleSheetsApiServiceKey.json:ro" `
           --name 13f-auto-rebalancer-container `
-          13f-auto-rebalancer --spring.profiles.active=windows --spring.config.additional-location=file:/config/
+          13f-auto-rebalancer
